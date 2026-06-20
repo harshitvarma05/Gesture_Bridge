@@ -1,0 +1,21 @@
+[Unit]
+Description=Gesture-Bridge Assistive Communication
+After=graphical.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/opt/gesture-bridge
+EnvironmentFile=/etc/gesture-bridge.env
+Environment=MPLCONFIGDIR=/tmp/gesture-bridge-matplotlib
+Environment=DISPLAY=:0
+ExecStart=/opt/gesture-bridge/venv/bin/python /opt/gesture-bridge/app.py
+Restart=on-failure
+RestartSec=3
+
+# Basic service hardening while retaining camera, display and GPIO access.
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=graphical.target
