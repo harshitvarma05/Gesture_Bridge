@@ -5,6 +5,7 @@ After=graphical.target
 [Service]
 Type=simple
 User=pi
+SupplementaryGroups=video gpio
 WorkingDirectory=/opt/gesture-bridge
 EnvironmentFile=/etc/gesture-bridge.env
 Environment=MPLCONFIGDIR=/tmp/gesture-bridge-matplotlib

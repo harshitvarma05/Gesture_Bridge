@@ -18,6 +18,7 @@ from gesture_bridge.speech import SpeechService
 from gesture_bridge.emergency import EmergencyController
 from gesture_bridge.telemetry import SessionTelemetry
 from gesture_bridge.config import env_float, env_int, load_env_file
+from gesture_bridge.camera import open_camera
 
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
@@ -821,21 +822,23 @@ def main():
         print(f"Startup error: missing MediaPipe model: {MODEL_TASK_FILE}")
         return
 
-    camera_index = env_int("GESTURE_BRIDGE_CAMERA_INDEX", 0, minimum=0, maximum=10)
+    camera_index = env_int("GESTURE_BRIDGE_CAMERA_INDEX", -1, minimum=-1, maximum=10)
     display_width = env_int("GESTURE_BRIDGE_DISPLAY_WIDTH", 1280, minimum=1280, maximum=3840)
     display_height = env_int("GESTURE_BRIDGE_DISPLAY_HEIGHT", 720, minimum=720, maximum=2160)
     analysis_width = env_int("GESTURE_BRIDGE_ANALYSIS_WIDTH", 640, minimum=320, maximum=1280)
     analysis_height = env_int("GESTURE_BRIDGE_ANALYSIS_HEIGHT", 360, minimum=240, maximum=720)
-    cap = cv2.VideoCapture(camera_index)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, analysis_width)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, analysis_height)
-
-    if not cap.isOpened():
+    camera = open_camera(camera_index, analysis_width, analysis_height, fps=30)
+    if camera is None:
         print(
-            f"Startup error: camera {camera_index} could not be opened. "
-            "Check camera permissions or set GESTURE_BRIDGE_CAMERA_INDEX."
+            f"Startup error: no readable webcam found ({'auto scan' if camera_index < 0 else f'index {camera_index}'}). "
+            "Check /dev/video* permissions on Pi or set GESTURE_BRIDGE_CAMERA_INDEX."
         )
         return
+    cap = camera.capture
+    print(
+        f"Camera: index {camera.index}, backend {camera.backend}, "
+        f"{camera.width}x{camera.height} at requested {camera.fps:.0f} FPS"
+    )
 
     cv2.namedWindow(WINDOW_TITLE, cv2.WINDOW_AUTOSIZE)
     ui_scale_state = {

@@ -214,6 +214,30 @@ sudo systemctl start gesture-bridge
 Recognition and safety analysis remain offline; only the optional alert
 webhook requires a network.
 
+### USB webcam on Raspberry Pi
+
+USB UVC webcams are supported through OpenCV/V4L2. Set automatic discovery in
+`/etc/gesture-bridge.env`:
+
+```bash
+GESTURE_BRIDGE_CAMERA_INDEX=-1
+```
+
+The app scans indices 0–5 and accepts only a device that returns a real frame. Test
+the camera before starting the service:
+
+```bash
+ls -l /dev/video*
+v4l2-ctl --list-devices
+python hardware_self_test.py --camera-index -1 --frames 60
+```
+
+If the webcam is known to be `/dev/video2`, use camera index `2`. The systemd service
+runs with `video` and `gpio` supplementary groups. After configuration changes run
+`sudo systemctl restart gesture-bridge`; use
+`journalctl -u gesture-bridge -n 100 --no-pager` to inspect the selected camera or
+any permission error.
+
 ## Production boundary
 
 The code is hardened for prototype deployment: paths are independent of the launch

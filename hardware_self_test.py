@@ -14,6 +14,7 @@ import pickle
 import time
 
 from gesture_bridge.alerts import AlertManager, LocationProvider
+from gesture_bridge.camera import open_camera
 from gesture_bridge.config import load_env_file
 from gesture_bridge.temporal import DESCRIPTOR_VERSION
 
@@ -79,10 +80,10 @@ def check_pretrained_model(path="gesture_recognizer.task"):
 
 def check_camera(index, frames):
     try:
-        import cv2
-        capture = cv2.VideoCapture(index)
-        if not capture.isOpened():
-            return {"ok": False, "error": "camera did not open"}
+        camera = open_camera(index, 640, 360, fps=30)
+        if camera is None:
+            return {"ok": False, "error": "no readable webcam found", "requested_index": index}
+        capture = camera.capture
         start = time.perf_counter()
         received = 0
         for _ in range(frames):
@@ -90,7 +91,14 @@ def check_camera(index, frames):
             received += int(success)
         elapsed = time.perf_counter() - start
         capture.release()
-        return {"ok": received == frames, "frames": received, "fps": round(received / max(elapsed, 0.001), 1)}
+        return {
+            "ok": received == frames,
+            "index": camera.index,
+            "backend": camera.backend,
+            "resolution": f"{camera.width}x{camera.height}",
+            "frames": received,
+            "fps": round(received / max(elapsed, 0.001), 1),
+        }
     except (ImportError, OSError) as error:
         return {"ok": False, "error": type(error).__name__}
 
@@ -113,7 +121,7 @@ def provider_readiness():
 def main():
     load_env_file(Path(__file__).resolve().parent / ".env")
     parser = argparse.ArgumentParser()
-    parser.add_argument("--camera-index", type=int, default=0)
+    parser.add_argument("--camera-index", type=int, default=-1, help="-1 automatically scans USB webcams")
     parser.add_argument("--frames", type=int, default=60)
     parser.add_argument("--buzzer", action="store_true", help="physically pulse the configured GPIO buzzer")
     parser.add_argument("--send-test-alert", action="store_true", help="send a real provider test if live mode is enabled")
