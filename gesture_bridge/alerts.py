@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import socket
+import ssl
 import threading
 import time
 import urllib.parse
@@ -13,6 +14,15 @@ import urllib.request
 import uuid
 
 from .config import env_int
+
+
+def _trusted_ssl_context():
+    """Use certifi in Python.org virtualenvs whose macOS CA bundle is incomplete."""
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        return ssl.create_default_context()
 
 
 def _now():
@@ -52,6 +62,9 @@ class AlertManager:
     def __init__(self, log_path="emergency_alerts.jsonl"):
         self.log_path = Path(log_path)
         self.webhook_url = os.getenv("GESTURE_BRIDGE_ALERT_WEBHOOK", "").strip()
+        self.ntfy_url = os.getenv("GESTURE_BRIDGE_NTFY_URL", "").strip().rstrip("/")
+        self.ntfy_token = os.getenv("GESTURE_BRIDGE_NTFY_TOKEN", "").strip()
+        self.contact_name = os.getenv("GESTURE_BRIDGE_CONTACT_NAME", "caregiver").strip() or "caregiver"
         self.demo_mode = os.getenv("GESTURE_BRIDGE_LIVE_ALERTS", "0") != "1"
         self.location_provider = LocationProvider()
         self.max_attempts = env_int("GESTURE_BRIDGE_ALERT_RETRIES", 3, minimum=1, maximum=10)
@@ -66,6 +79,7 @@ class AlertManager:
             "reason": reason,
             "message": message,
             "location": self.location_provider.get(),
+            "recipient": self.contact_name,
             "silent": silent,
             "mode": "demo" if self.demo_mode else "live",
             "state": "RECORDED" if self.demo_mode else "QUEUED",
@@ -90,6 +104,15 @@ class AlertManager:
     def cancel(self):
         return self._transition("CANCELLED", "Alert cancelled by user")
 
+    def wait_for_delivery(self, payload, timeout=20.0):
+        """Wait for a test/CLI delivery thread without blocking the camera app."""
+        deadline = time.monotonic() + max(0.0, float(timeout))
+        while time.monotonic() < deadline:
+            if payload.get("state") in {"DELIVERED", "FAILED", *self.TERMINAL_STATES}:
+                return payload.get("state")
+            time.sleep(0.05)
+        return payload.get("state")
+
     def _transition(self, state, status):
         with self._lock:
             if not self.active_alert:
@@ -102,7 +125,7 @@ class AlertManager:
             return True
 
     def _deliver_with_retry(self, payload):
-        configured = bool(self.webhook_url or self._twilio_configured())
+        configured = bool(self.webhook_url or self.ntfy_url or self._twilio_configured())
         if not configured:
             self._set_delivery_state(payload, "FAILED", "No delivery provider configured")
             return
@@ -112,19 +135,29 @@ class AlertManager:
                 if payload.get("state") in self.TERMINAL_STATES:
                     return
                 payload["attempt"] = attempt
-            try:
-                deliveries = []
-                if self.webhook_url:
-                    self._post_webhook(payload)
-                    deliveries.append("webhook")
-                if self._twilio_configured():
-                    self._post_twilio(payload)
-                    deliveries.append("Twilio")
-                self._set_delivery_state(payload, "DELIVERED", f"Delivered via {', '.join(deliveries)}")
+            deliveries = []
+            failures = []
+            providers = []
+            if self.webhook_url:
+                providers.append(("webhook", self._post_webhook))
+            if self.ntfy_url:
+                providers.append(("phone notification", self._post_ntfy))
+            if self._twilio_configured():
+                providers.append(("Twilio", self._post_twilio))
+            for name, provider in providers:
+                try:
+                    provider(payload)
+                    deliveries.append(name)
+                except (OSError, TimeoutError, ValueError) as error:
+                    failures.append(f"{name}:{type(error).__name__}")
+            if deliveries:
+                suffix = f" ({'; '.join(failures)} failed)" if failures else ""
+                self._set_delivery_state(payload, "DELIVERED", f"Delivered via {', '.join(deliveries)}{suffix}")
                 return
-            except (OSError, TimeoutError, ValueError) as error:
+            else:
+                error_summary = ", ".join(failures) or "unknown provider error"
                 if attempt == self.max_attempts:
-                    self._set_delivery_state(payload, "FAILED", f"Delivery failed: {type(error).__name__}")
+                    self._set_delivery_state(payload, "FAILED", f"Delivery failed: {error_summary}")
                     return
                 self._set_delivery_state(payload, "RETRYING", f"Retry {attempt}/{self.max_attempts}")
                 time.sleep(min(2 ** (attempt - 1), 8))
@@ -134,6 +167,7 @@ class AlertManager:
             if payload.get("state") in self.TERMINAL_STATES:
                 return
             payload["state"] = state
+            payload["delivery_status"] = status
             payload["updated_at"] = _now()
             self._write_event(payload)
             self.last_status = f"{status}: {payload['alert_id']}"
@@ -145,7 +179,29 @@ class AlertManager:
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urllib.request.urlopen(request, timeout=5) as response:
+        with urllib.request.urlopen(request, timeout=5, context=_trusted_ssl_context()) as response:
+            response.read()
+
+    def _post_ntfy(self, payload):
+        body = (
+            f"{payload['message']}\nReason: {payload['reason']}\n"
+            f"Location: {payload['location']}\nAlert ID: {payload['alert_id']}"
+        )
+        headers = {
+            "Title": "Gesture-Bridge emergency",
+            "Priority": "urgent",
+            "Tags": "warning,medical_symbol",
+            "Content-Type": "text/plain; charset=utf-8",
+        }
+        if self.ntfy_token:
+            headers["Authorization"] = f"Bearer {self.ntfy_token}"
+        request = urllib.request.Request(
+            self.ntfy_url,
+            data=body.encode("utf-8"),
+            headers=headers,
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=8, context=_trusted_ssl_context()) as response:
             response.read()
 
     @staticmethod
@@ -168,7 +224,7 @@ class AlertManager:
             headers={"Authorization": f"Basic {credentials}"},
             method="POST",
         )
-        with urllib.request.urlopen(request, timeout=8) as response:
+        with urllib.request.urlopen(request, timeout=8, context=_trusted_ssl_context()) as response:
             response.read()
 
     def _write_event(self, payload):

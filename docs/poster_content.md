@@ -36,7 +36,7 @@ Add a safety branch after landmark extraction:
 
 Small note below the diagram:
 
-*A stability filter confirms a gesture over multiple frames. Low-confidence personalized predictions request user confirmation instead of producing an uncertain message.*
+*A stability filter confirms a gesture over multiple frames. Low-confidence predictions remain unconfirmed instead of producing an uncertain message.*
 
 ## Experimentation / Hardware / Simulation / Software Model
 
@@ -45,8 +45,8 @@ Small note below the diagram:
 - Laptop/desktop webcam and display
 - Python, OpenCV and MediaPipe Tasks
 - Up to two hands; 21 three-dimensional landmarks per hand
-- Rule-based recognizer with personalized Random Forest fallback
-- Rolling temporal descriptor for motion-based video recognition
+- Google MediaPipe pretrained seven-pose gesture recognizer
+- Fixed assistive mappings: Open Palm, Victory, Thumb Up/Down, Pointing Up, Closed Fist and I-Love-You
 - Offline text-to-speech using pyttsx3
 - JSONL alert audit log with acknowledgement and cancellation
 
@@ -69,13 +69,13 @@ Add a screenshot of the Gesture-Bridge dashboard beside or below the circuit dia
 
 ## Results
 
-- Real-time camera dashboard demonstrated at approximately **16 FPS** on the current development machine.
-- Static recognition uses **126 normalized shape features**; temporal recognition adds four trajectory features for **130 features per frame**.
+- Pretrained gesture recognition runs offline and requires no per-user model training.
+- MediaPipe supplies 21 three-dimensional landmarks per detected hand for distress and SOS analysis.
 - Stable recognition uses a **10-frame confirmation window** to reduce flickering output.
 - **Four covert SOS patterns** and four motion-distress features are implemented.
 - Emergency alerts support unique IDs, retries, audit states, acknowledgement and cancellation.
 - **17 automated software tests passed**, covering SOS detection, cancelable alerts, calibration, configuration, telemetry, evaluation metrics, dataset migration, user-facing actions, contextual sentences and temporal motion features.
-- The existing dataset contains **334 samples across three labels**; its model is correctly marked provisional and excluded from live use until broader signer and vocabulary coverage is collected.
+- Experimental custom and temporal datasets are retained for future work but excluded from the graded live path.
 
 ### Suggested result graphics
 
@@ -95,6 +95,8 @@ Do not present the provisional three-class validation score as final recognition
 - Added a novel dual pathway for communication and distress-aware emergency intent.
 - Implemented discreet SOS recognition without a separate emergency button.
 - Added context-aware phrase generation and multi-sign sentence composition.
+- Added six deployment contexts—General, Home, Hospital, Classroom, Public Office
+  and Transport—with a complete phrase mapping for every active pretrained pose.
 - Created configurable caregiver alerts with location and Raspberry Pi buzzer support.
 - Added personalized calibration, dataset-quality checks and a video-based temporal training pipeline.
 - Established a deployable foundation for hospitals, classrooms and public-service environments.

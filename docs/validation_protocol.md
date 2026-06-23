@@ -12,8 +12,8 @@ Targets below are project acceptance criteria, not results until trials are comp
 
 ## Recognition trial
 
-Test the 12 temporal gestures shown in the GUI. Each participant performs every sign
-five times, giving at least 300 trials for five participants. Vary distance, lighting
+Test the seven pretrained command poses shown in the GUI. Each participant performs
+every pose five times, giving at least 175 trials for five participants. Vary distance, lighting
 and camera angle across trials. Record:
 
 - participant ID and trial number;
@@ -61,7 +61,7 @@ Project targets:
 1. Run `python hardware_self_test.py` before the presentation.
 2. Confirm alerts are in demo mode unless the caregiver expects a test.
 3. Calibrate calm motion with `B`.
-4. Demonstrate one temporal gesture and one rule-based emergency gesture.
+4. Demonstrate Open Palm → Hello, Victory → Help and Closed Fist → Emergency.
 5. Cancel the visible alert with `K`.
 6. Demonstrate a silent SOS and show its audit entry.
 7. Exit with `Q` and show the generated session report.

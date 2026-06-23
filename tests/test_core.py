@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from unittest.mock import MagicMock, patch
 import csv
 import os
 import numpy as np
@@ -8,6 +9,7 @@ from types import SimpleNamespace as Point
 
 from gesture_bridge.alerts import AlertManager
 from gesture_bridge.intelligence import ContextInterpreter, SentenceEngine
+from gesture_bridge.recognition import GestureDebouncer
 from gesture_bridge.safety import SafetyAnalyzer
 from migrate_dataset import migrate
 from hardware_self_test import check_dataset
@@ -60,18 +62,60 @@ class IntelligenceTests(unittest.TestCase):
     def test_context_changes_help_phrase(self):
         interpreter = ContextInterpreter()
         interpreter.cycle()
+        self.assertEqual(interpreter.context, "Home")
+        interpreter.cycle()
         self.assertEqual(interpreter.context, "Hospital")
         self.assertIn("medical", interpreter.interpret("Help"))
+
+    def test_every_live_gesture_has_a_phrase_in_every_context(self):
+        gestures = {"Hello", "Help", "Yes", "No", "Doctor", "Emergency", "Caregiver"}
+        for context in ContextInterpreter.CONTEXTS:
+            self.assertEqual(set(ContextInterpreter.PHRASES[context]), gestures)
+            for gesture in gestures:
+                self.assertTrue(ContextInterpreter.phrase_for(context, gesture).endswith("."))
 
     def test_sentence_engine_handles_help_doctor(self):
         engine = SentenceEngine()
         engine.add("Help")
         self.assertEqual(engine.add("Doctor"), "I need help. Please call a doctor.")
 
-    def test_dataset_gesture_has_user_facing_action(self):
+    def test_live_gesture_has_user_facing_action(self):
         interpreter = ContextInterpreter()
-        self.assertEqual(interpreter.interpret("Break"), "I need a break.")
-        self.assertEqual(interpreter.interpret("Wrong"), "That is not correct.")
+        self.assertEqual(interpreter.interpret("Hello"), "Hello.")
+        self.assertEqual(interpreter.interpret("Caregiver"), "Please contact my caregiver.")
+
+
+class RecognitionTests(unittest.TestCase):
+    def test_confirmation_is_time_based_at_low_fps(self):
+        smoother = GestureDebouncer()
+        states = [smoother.update("Help", 0.9, now) for now in (0.0, 0.2, 0.4)]
+        self.assertEqual(states[-1].event, "Help")
+
+    def test_held_pose_speaks_once_and_release_rearms_it(self):
+        smoother = GestureDebouncer()
+        events = []
+        for now in (0.0, 0.15, 0.30, 0.45, 0.60):
+            events.append(smoother.update("Hello", 0.9, now).event)
+        self.assertEqual(events.count("Hello"), 1)
+        smoother.update("Unknown", 0.0, 0.70)
+        smoother.update("Unknown", 0.0, 0.90)
+        repeated = [smoother.update("Hello", 0.9, now).event for now in (1.0, 1.15, 1.30)]
+        self.assertIn("Hello", repeated)
+
+    def test_single_frame_misclassification_is_not_confirmed(self):
+        smoother = GestureDebouncer()
+        smoother.update("Hello", 0.9, 0.0)
+        smoother.update("Emergency", 0.9, 0.1)
+        state = smoother.update("Hello", 0.9, 0.3)
+        self.assertIsNone(state.event)
+
+    def test_brief_confidence_drop_does_not_restart_confirmation(self):
+        smoother = GestureDebouncer()
+        smoother.update("Help", 0.9, 0.0)
+        smoother.update("Unknown", 0.0, 0.1)
+        smoother.update("Help", 0.9, 0.2)
+        state = smoother.update("Help", 0.9, 0.35)
+        self.assertEqual(state.event, "Help")
 
 
 class AlertTests(unittest.TestCase):
@@ -104,6 +148,38 @@ class AlertTests(unittest.TestCase):
             payload = controller.tick(now=13)
             self.assertEqual(payload["reason"], "Emergency")
             self.assertIsNone(controller.pending)
+
+    def test_ntfy_phone_notification_contains_location(self):
+        environment = {
+            "GESTURE_BRIDGE_LIVE_ALERTS": "1",
+            "GESTURE_BRIDGE_NTFY_URL": "https://ntfy.sh/private-test-topic",
+            "GESTURE_BRIDGE_LOCATION": "Ward 3",
+        }
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, environment, clear=False):
+            manager = AlertManager(f"{directory}/alerts.jsonl")
+            response = MagicMock()
+            response.__enter__.return_value.read.return_value = b"ok"
+            with patch("gesture_bridge.alerts.urllib.request.urlopen", return_value=response) as opener:
+                manager._post_ntfy({
+                    "message": "Emergency", "reason": "Closed fist", "location": "Ward 3", "alert_id": "abc123"
+                })
+            request = opener.call_args.args[0]
+            self.assertEqual(request.full_url, "https://ntfy.sh/private-test-topic")
+            self.assertIn(b"Ward 3", request.data)
+
+    def test_one_failed_provider_does_not_block_another(self):
+        environment = {
+            "GESTURE_BRIDGE_LIVE_ALERTS": "1",
+            "GESTURE_BRIDGE_ALERT_WEBHOOK": "https://invalid.example/alert",
+            "GESTURE_BRIDGE_NTFY_URL": "https://ntfy.sh/private-test-topic",
+            "GESTURE_BRIDGE_ALERT_RETRIES": "1",
+        }
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, environment, clear=False):
+            manager = AlertManager(f"{directory}/alerts.jsonl")
+            payload = {"alert_id": "abc", "state": "QUEUED", "attempt": 0}
+            with patch.object(manager, "_post_webhook", side_effect=OSError), patch.object(manager, "_post_ntfy"):
+                manager._deliver_with_retry(payload)
+            self.assertEqual(payload["state"], "DELIVERED")
 
 
 class DatasetTests(unittest.TestCase):

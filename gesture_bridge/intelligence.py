@@ -2,12 +2,51 @@
 
 
 class ContextInterpreter:
-    CONTEXTS = ("General", "Hospital", "Classroom", "Public Office")
+    CONTEXTS = ("General", "Home", "Hospital", "Classroom", "Public Office", "Transport")
     PHRASES = {
-        "General": {"Hello": "Hello.", "Thank You": "Thank you.", "Help": "I need help.", "Emergency": "This is an emergency.", "Pain": "I am in pain.", "Injury": "I am injured.", "Fever": "I have a fever.", "Drink": "I need a drink.", "Cry": "I am upset and need support.", "Come": "Please come here.", "Give": "Please give it to me.", "Busy": "I am busy right now.", "Break": "I need a break.", "Maybe": "Maybe; I am not certain.", "Wrong": "That is not correct.", "Call": "Please make a call."},
-        "Hospital": {"Help": "I need medical assistance.", "Doctor": "Please call a doctor.", "Water": "May I have some water?", "Medicine": "I need my medicine.", "Pain": "I am in pain.", "Injury": "I have an injury and need assistance.", "Fever": "I have a fever. Please check my temperature.", "Drink": "May I have something to drink?", "Cry": "I am distressed and need assistance.", "Chest": "The pain is in my chest.", "Emergency": "Medical emergency. Please call a doctor."},
-        "Classroom": {"Help": "I need help with this.", "Doctor": "I need to visit the medical room.", "Water": "May I drink some water?"},
-        "Public Office": {"Help": "Please help me with this process.", "Doctor": "I need medical assistance.", "Emergency": "Emergency—please contact security."},
+        "General": {
+            "Hello": "Hello.", "Help": "I need help.", "Yes": "Yes.", "No": "No.",
+            "Doctor": "Please call a doctor.", "Emergency": "This is an emergency.",
+            "Caregiver": "Please contact my caregiver.",
+        },
+        "Home": {
+            "Hello": "Hello, I am here.", "Help": "I need help at home.",
+            "Yes": "Yes, that is okay.", "No": "No, please stop.",
+            "Doctor": "Please call my doctor.",
+            "Emergency": "Emergency at home. Contact my caregiver now.",
+            "Caregiver": "Please come and check on me.",
+        },
+        "Hospital": {
+            "Hello": "Hello, I need assistance.", "Help": "I need medical assistance.",
+            "Yes": "Yes, that is correct.", "No": "No, please stop.",
+            "Doctor": "Please call a doctor.",
+            "Emergency": "Medical emergency. Please call a doctor now.",
+            "Caregiver": "Please contact my caregiver.",
+        },
+        "Classroom": {
+            "Hello": "Good morning.", "Help": "I need help with this lesson.",
+            "Yes": "Yes, I understand.", "No": "No, I do not understand.",
+            "Doctor": "I need to visit the medical room.",
+            "Emergency": "Medical emergency in the classroom. Get help now.",
+            "Caregiver": "Please contact my parent or caregiver.",
+        },
+        "Public Office": {
+            "Hello": "Hello, I need assistance at this counter.",
+            "Help": "Please help me with this process.",
+            "Yes": "Yes, this information is correct.",
+            "No": "No, this information is not correct.",
+            "Doctor": "I need medical assistance.",
+            "Emergency": "Emergency. Please contact security and medical help.",
+            "Caregiver": "Please contact my caregiver or companion.",
+        },
+        "Transport": {
+            "Hello": "Hello, I need travel assistance.",
+            "Help": "Please help me with this route or vehicle.",
+            "Yes": "Yes, this is my destination.", "No": "No, this is not my destination.",
+            "Doctor": "I need medical assistance while travelling.",
+            "Emergency": "Transport emergency. Stop safely and call for help.",
+            "Caregiver": "Contact my caregiver and share my location.",
+        },
     }
 
     def __init__(self):
@@ -22,7 +61,21 @@ class ContextInterpreter:
         return self.context
 
     def interpret(self, gesture):
-        return self.PHRASES.get(self.context, {}).get(gesture, gesture)
+        return self.phrase_for(self.context, gesture)
+
+    @classmethod
+    def phrase_for(cls, context, gesture):
+        return cls.PHRASES.get(context, {}).get(gesture, gesture)
+
+    def compose(self, gestures, limit=3):
+        """Compose recent commands using the vocabulary of the active setting."""
+        unique = []
+        for gesture in gestures:
+            if not unique or unique[-1] != gesture:
+                unique.append(gesture)
+        if not unique:
+            return "Waiting for a stable sign..."
+        return " ".join(self.interpret(gesture) for gesture in unique[-limit:])
 
 
 class SentenceEngine:

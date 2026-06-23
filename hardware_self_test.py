@@ -14,6 +14,7 @@ import pickle
 import time
 
 from gesture_bridge.alerts import AlertManager, LocationProvider
+from gesture_bridge.config import load_env_file
 from gesture_bridge.temporal import DESCRIPTOR_VERSION
 
 
@@ -67,6 +68,15 @@ def check_temporal_model(path="isl_temporal_model.pkl"):
         return {"ok": False, "optional": True, "error": type(error).__name__}
 
 
+def check_pretrained_model(path="gesture_recognizer.task"):
+    model_path = Path(path)
+    try:
+        size = model_path.stat().st_size
+        return {"ok": size > 1_000_000, "path": str(model_path), "size_bytes": size}
+    except OSError as error:
+        return {"ok": False, "error": type(error).__name__}
+
+
 def check_camera(index, frames):
     try:
         import cv2
@@ -88,17 +98,20 @@ def check_camera(index, frames):
 def provider_readiness():
     twilio_keys = ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_FROM", "GESTURE_BRIDGE_CAREGIVER_TO")
     webhook = bool(os.getenv("GESTURE_BRIDGE_ALERT_WEBHOOK", "").strip())
+    ntfy = bool(os.getenv("GESTURE_BRIDGE_NTFY_URL", "").strip())
     twilio = all(os.getenv(key, "").strip() for key in twilio_keys)
     live_mode = os.getenv("GESTURE_BRIDGE_LIVE_ALERTS", "0") == "1"
     return {
-        "ok": (webhook or twilio) if live_mode else True,
+        "ok": (webhook or ntfy or twilio) if live_mode else True,
         "mode": "live" if live_mode else "demo",
         "webhook_configured": webhook,
+        "phone_notification_configured": ntfy,
         "twilio_configured": twilio,
     }
 
 
 def main():
+    load_env_file(Path(__file__).resolve().parent / ".env")
     parser = argparse.ArgumentParser()
     parser.add_argument("--camera-index", type=int, default=0)
     parser.add_argument("--frames", type=int, default=60)
@@ -112,6 +125,7 @@ def main():
         "dataset": check_dataset(),
         "model": check_model(),
         "temporal_model": check_temporal_model(),
+        "pretrained_gesture_model": check_pretrained_model(),
         "camera": check_camera(args.camera_index, args.frames),
         "providers": provider_readiness(),
         "location": {"value": LocationProvider().get()},
@@ -125,9 +139,15 @@ def main():
     if args.send_test_alert:
         manager = AlertManager()
         payload = manager.trigger("Integration self-test", "Gesture-Bridge test alert—no emergency.", silent=True)
-        report["test_alert"] = {"alert_id": payload["alert_id"], "mode": payload["mode"], "status": manager.last_status}
+        manager.wait_for_delivery(payload, timeout=30)
+        report["test_alert"] = {
+            "alert_id": payload["alert_id"],
+            "mode": payload["mode"],
+            "state": payload["state"],
+            "status": manager.last_status,
+        }
 
-    critical = (report["temporal_model"]["ok"], report["camera"]["ok"], report["providers"]["ok"])
+    critical = (report["pretrained_gesture_model"]["ok"], report["camera"]["ok"], report["providers"]["ok"])
     report["ready_for_camera_demo"] = all(critical)
     Path(args.output).write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(json.dumps(report, indent=2))

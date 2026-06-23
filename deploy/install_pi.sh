@@ -25,8 +25,8 @@ python3 -m venv "$INSTALL_DIR/venv"
 "$INSTALL_DIR/venv/bin/pip" install -r "$INSTALL_DIR/requirements.txt" gpiozero
 chown -R pi:pi "$INSTALL_DIR"
 
-if [[ ! -f "$INSTALL_DIR/hand_landmarker.task" ]]; then
-  echo "Missing hand_landmarker.task; installation cannot continue."
+if [[ ! -f "$INSTALL_DIR/gesture_recognizer.task" ]]; then
+  echo "Missing gesture_recognizer.task; installation cannot continue."
   exit 1
 fi
 

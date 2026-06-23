@@ -4,18 +4,19 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="ad11cf57-665b-4709-a241-e8d18b3a3894" name="Changes" comment="Add core application files for the Gesture-Bridge prototype, including gesture recognition, emergency alerts, and user interface components.">
-      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+    <list default="true" id="ad11cf57-665b-4709-a241-e8d18b3a3894" name="Changes" comment="Refactor core components to improve temporal recognition, implement cancelable emergency countdown, enhance evaluation tools, and update documentation and UI rendering options.">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app.py" beforeDir="false" afterPath="$PROJECT_DIR$/app.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/config.example.env" beforeDir="false" afterPath="$PROJECT_DIR$/config.example.env" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/deploy/install_pi.sh" beforeDir="false" afterPath="$PROJECT_DIR$/deploy/install_pi.sh" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/docs/poster_content.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/poster_content.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/storage_and_cleanup.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/storage_and_cleanup.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/validation_protocol.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/validation_protocol.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/gesture_bridge/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/gesture_bridge/__init__.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/gesture_bridge/alerts.py" beforeDir="false" afterPath="$PROJECT_DIR$/gesture_bridge/alerts.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/gesture_bridge/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/gesture_bridge/config.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/gesture_bridge/intelligence.py" beforeDir="false" afterPath="$PROJECT_DIR$/gesture_bridge/intelligence.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/gesture_bridge/temporal.py" beforeDir="false" afterPath="$PROJECT_DIR$/gesture_bridge/temporal.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/gesture_bridge/speech.py" beforeDir="false" afterPath="$PROJECT_DIR$/gesture_bridge/speech.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/hardware_self_test.py" beforeDir="false" afterPath="$PROJECT_DIR$/hardware_self_test.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/tests/test_core.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_core.py" afterDir="false" />
@@ -112,7 +113,7 @@
       <workItem from="1781952051706" duration="1249000" />
       <workItem from="1781954102950" duration="5003000" />
       <workItem from="1782098618695" duration="9000" />
-      <workItem from="1782202316761" duration="1418000" />
+      <workItem from="1782202316761" duration="5874000" />
     </task>
     <task id="LOCAL-00001" summary="Add core application files for the Gesture-Bridge prototype, including gesture recognition, emergency alerts, and user interface components.">
       <option name="closed" value="true" />
@@ -122,7 +123,15 @@
       <option name="project" value="LOCAL" />
       <updated>1781960250643</updated>
     </task>
-    <option name="localTasksCounter" value="2" />
+    <task id="LOCAL-00002" summary="Refactor core components to improve temporal recognition, implement cancelable emergency countdown, enhance evaluation tools, and update documentation and UI rendering options.">
+      <option name="closed" value="true" />
+      <created>1782203981540</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1782203981540</updated>
+    </task>
+    <option name="localTasksCounter" value="3" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -130,10 +139,11 @@
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="Add core application files for the Gesture-Bridge prototype, including gesture recognition, emergency alerts, and user interface components." />
-    <option name="LAST_COMMIT_MESSAGE" value="Add core application files for the Gesture-Bridge prototype, including gesture recognition, emergency alerts, and user interface components." />
+    <MESSAGE value="Refactor core components to improve temporal recognition, implement cancelable emergency countdown, enhance evaluation tools, and update documentation and UI rendering options." />
+    <option name="LAST_COMMIT_MESSAGE" value="Refactor core components to improve temporal recognition, implement cancelable emergency countdown, enhance evaluation tools, and update documentation and UI rendering options." />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
-    <SUITE FILE_PATH="coverage/sign_assist$app.coverage" NAME="app Coverage Results" MODIFIED="1782203735086" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/sign_assist$app.coverage" NAME="app Coverage Results" MODIFIED="1782208955298" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/sign_assist$collect_data.coverage" NAME="collect_data Coverage Results" MODIFIED="1778214108078" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/sign_assist$temporal.coverage" NAME="temporal Coverage Results" MODIFIED="1781956899407" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/gesture_bridge" />
   </component>
