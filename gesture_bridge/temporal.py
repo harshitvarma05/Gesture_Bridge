@@ -64,9 +64,12 @@ def sequence_descriptor(sequence, steps=SEQUENCE_STEPS):
 
 
 class TemporalRecognizer:
-    def __init__(self, model_path="isl_temporal_model.pkl", window_frames=24, min_frames=10):
+    def __init__(self, model_path="isl_temporal_model.pkl", window_frames=24, min_frames=10, prediction_interval=2):
         self.window = deque(maxlen=window_frames)
         self.min_frames = min_frames
+        self.prediction_interval = max(1, int(prediction_interval))
+        self._update_count = 0
+        self._last_prediction = None
         self.bundle = None
         self.last_debug = None
         if os.path.exists(model_path):
@@ -85,15 +88,19 @@ class TemporalRecognizer:
     def reset(self):
         self.window.clear()
         self.last_debug = None
+        self._update_count = 0
+        self._last_prediction = None
 
     def update(self, hands):
         if not hands:
-            self.window.clear()
-            self.last_debug = None
+            self.reset()
             return None
         self.window.append(landmarks_to_vector(hands))
         if not self.available or len(self.window) < self.min_frames:
             return None
+        self._update_count += 1
+        if self._update_count % self.prediction_interval:
+            return self._last_prediction
         descriptor = sequence_descriptor(list(self.window))
         frames = np.asarray(self.window, dtype=np.float32)
         centroid_motion = float(np.mean(np.linalg.norm(np.diff(frames[:, 126:128], axis=0), axis=1)))
@@ -134,8 +141,11 @@ class TemporalRecognizer:
             self.last_debug["radius_ratio"] = radius_ratio
             if distance > limit:
                 self.last_debug["rejection"] = "unfamiliar motion"
+                self._last_prediction = None
                 return None
             if margin < minimum_margin:
                 self.last_debug["rejection"] = "ambiguous classes"
+                self._last_prediction = None
                 return None
-        return raw_label.title(), confidence
+        self._last_prediction = (raw_label.title(), confidence)
+        return self._last_prediction

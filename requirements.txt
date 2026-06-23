@@ -1,6 +1,6 @@
 mediapipe
 numpy
 opencv-python
+pillow
 pyttsx3
 scikit-learn
-

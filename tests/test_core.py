@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 import csv
+import os
 import numpy as np
 from pathlib import Path
 from types import SimpleNamespace as Point
@@ -13,6 +14,10 @@ from hardware_self_test import check_dataset
 from build_video_manifest import build_manifest
 from gesture_bridge.temporal import FRAME_FEATURES, SEQUENCE_STEPS, sequence_descriptor
 from prepare_isl_video_60 import prepare, source_stem
+from gesture_bridge.emergency import EmergencyController
+from gesture_bridge.telemetry import SessionTelemetry
+from evaluate_trials import evaluate
+from gesture_bridge.config import env_float, env_int
 
 
 def make_hand(pinched=False):
@@ -63,6 +68,11 @@ class IntelligenceTests(unittest.TestCase):
         engine.add("Help")
         self.assertEqual(engine.add("Doctor"), "I need help. Please call a doctor.")
 
+    def test_dataset_gesture_has_user_facing_action(self):
+        interpreter = ContextInterpreter()
+        self.assertEqual(interpreter.interpret("Break"), "I need a break.")
+        self.assertEqual(interpreter.interpret("Wrong"), "That is not correct.")
+
 
 class AlertTests(unittest.TestCase):
     def test_demo_alert_is_only_recorded(self):
@@ -75,6 +85,25 @@ class AlertTests(unittest.TestCase):
             self.assertEqual(manager.active_alert["state"], "ACKNOWLEDGED")
             self.assertTrue(manager.cancel())
             self.assertEqual(manager.active_alert["state"], "CANCELLED")
+
+    def test_cancelable_countdown_does_not_deliver_early(self):
+        with tempfile.TemporaryDirectory() as directory:
+            manager = AlertManager(f"{directory}/alerts.jsonl")
+            controller = EmergencyController(manager, delay_seconds=5)
+            self.assertTrue(controller.arm("Emergency", "message", now=10))
+            self.assertIsNone(controller.tick(now=14.9))
+            self.assertTrue(controller.cancel())
+            self.assertIsNone(controller.tick(now=20))
+            self.assertIsNone(manager.active_alert)
+
+    def test_countdown_delivers_at_deadline(self):
+        with tempfile.TemporaryDirectory() as directory:
+            manager = AlertManager(f"{directory}/alerts.jsonl")
+            controller = EmergencyController(manager, delay_seconds=3)
+            controller.arm("Emergency", "message", now=10)
+            payload = controller.tick(now=13)
+            self.assertEqual(payload["reason"], "Emergency")
+            self.assertIsNone(controller.pending)
 
 
 class DatasetTests(unittest.TestCase):
@@ -138,6 +167,37 @@ class TemporalTests(unittest.TestCase):
         backward = sequence_descriptor(sequence[::-1])
         self.assertEqual(forward.shape, ((SEQUENCE_STEPS + 4) * FRAME_FEATURES,))
         self.assertFalse(np.allclose(forward, backward))
+
+
+class ValidationTests(unittest.TestCase):
+    def test_session_telemetry_writes_aggregate_report(self):
+        with tempfile.TemporaryDirectory() as directory:
+            telemetry = SessionTelemetry(directory)
+            telemetry.frame(True, "Hello", "Temporal", 30)
+            telemetry.frame(False, "No hand detected", "Temporal", 20)
+            telemetry.confirmed("Hello")
+            output = telemetry.close()
+            self.assertTrue(output.exists())
+            self.assertEqual(telemetry.summary()["confirmed_gestures"], {"Hello": 1})
+
+    def test_trial_evaluation_reports_accuracy_and_false_sos(self):
+        report = evaluate([
+            {"participant": "P1", "expected": "Hello", "predicted": "Hello", "response_time_seconds": "0.4", "false_sos": "false"},
+            {"participant": "P2", "expected": "Help", "predicted": "Hello", "response_time_seconds": "0.8", "false_sos": "true"},
+        ])
+        self.assertEqual(report["accuracy"], 0.5)
+        self.assertEqual(report["participants"], 2)
+        self.assertEqual(report["false_sos_count"], 1)
+
+    def test_invalid_environment_values_fall_back_and_clamp(self):
+        os.environ["GB_TEST_INT"] = "not-a-number"
+        os.environ["GB_TEST_FLOAT"] = "500"
+        try:
+            self.assertEqual(env_int("GB_TEST_INT", 4, minimum=1), 4)
+            self.assertEqual(env_float("GB_TEST_FLOAT", 5, maximum=30), 30)
+        finally:
+            os.environ.pop("GB_TEST_INT", None)
+            os.environ.pop("GB_TEST_FLOAT", None)
 
 
 if __name__ == "__main__":

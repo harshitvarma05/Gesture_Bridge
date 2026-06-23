@@ -6,6 +6,9 @@ venv/
 .env
 emergency_alerts.jsonl*
 recognition_log.csv*
+session_reports/
+evaluation_trials.csv
+evaluation_report.json
 isl_landmark_model.pkl
 gesture_profile.json
 model_metrics.json

@@ -9,10 +9,15 @@ from datetime import datetime
 from pathlib import Path
 import mediapipe as mp
 import numpy as np
+from PIL import Image, ImageDraw, ImageFont
 
 from gesture_bridge import AlertManager, ContextInterpreter, SafetyAnalyzer, SentenceEngine
+from gesture_bridge import __version__
 from gesture_bridge.temporal import TemporalRecognizer
 from gesture_bridge.speech import SpeechService
+from gesture_bridge.emergency import EmergencyController
+from gesture_bridge.telemetry import SessionTelemetry
+from gesture_bridge.config import env_float, env_int
 
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
@@ -46,11 +51,11 @@ ADD_COOLDOWN_SECONDS = 1.8
 RECENT_OUTPUT_LIMIT = 6
 MAX_HANDS = 2
 WINDOW_TITLE = "Gesture-Bridge | Distress-Aware Silent SOS"
-DEFAULT_UI_SCALE_PERCENT = 72
+DEFAULT_UI_SCALE_PERCENT = 100
 MIN_UI_SCALE_PERCENT = 40
-UI_SLIDER_X1 = 1010
-UI_SLIDER_X2 = 1245
-UI_SLIDER_Y = 35
+LOGICAL_UI_WIDTH = 1280
+LOGICAL_UI_HEIGHT = 720
+TEXT_RENDERER = os.getenv("GESTURE_BRIDGE_TEXT_RENDERER", "opencv").strip().lower()
 
 DATASET_TRAINED_SIGNS = [
     "Hello", "Thank You", "Fever", "Injury", "Drink", "Cry",
@@ -198,10 +203,10 @@ def draw_hand_landmarks(frame, hand_landmarks):
         cv2.circle(frame, center, 4, (255, 245, 232), -1, cv2.LINE_AA)
 
 
-UI_BG = (24, 27, 36)
-UI_CARD = (34, 38, 49)
-UI_CARD_ALT = (41, 46, 59)
-UI_BORDER = (69, 77, 96)
+UI_BG = (32, 22, 15)
+UI_CARD = (48, 34, 24)
+UI_CARD_ALT = (61, 46, 32)
+UI_BORDER = (90, 70, 52)
 UI_TEXT = (243, 245, 249)
 UI_MUTED = (163, 170, 186)
 UI_ACCENT = (255, 188, 50)
@@ -209,9 +214,124 @@ UI_SUCCESS = (102, 211, 137)
 UI_WARNING = (60, 184, 255)
 UI_DANGER = (83, 83, 244)
 
-TEMPORAL_GUIDE = DATASET_TRAINED_SIGNS
-HEURISTIC_GUIDE = ["Help", "Yes", "No", "Water", "Doctor", "Emergency", "Washroom"]
-CUSTOM_GUIDE = ["Pain", "Chest", "Medicine", "Call", "Caregiver"]
+_TEXT_BATCH = None
+_FONT_CACHE = {}
+_GLYPH_CACHE = {}
+_FONT_CANDIDATES = [
+    "/System/Library/Fonts/SFNS.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    "C:/Windows/Fonts/segoeui.ttf",
+]
+
+
+def begin_text_batch():
+    global _TEXT_BATCH
+    _TEXT_BATCH = []
+
+
+def end_text_batch():
+    global _TEXT_BATCH
+    commands = _TEXT_BATCH or []
+    _TEXT_BATCH = None
+    return commands
+
+
+def get_ui_font(size):
+    size = max(9, int(size))
+    if size not in _FONT_CACHE:
+        font_path = next((path for path in _FONT_CANDIDATES if Path(path).exists()), None)
+        _FONT_CACHE[size] = ImageFont.truetype(font_path, size) if font_path else ImageFont.load_default()
+    return _FONT_CACHE[size]
+
+
+def render_text_commands(frame, commands, coordinate_scale=1.0):
+    if not commands:
+        return
+    if TEXT_RENDERER != "pillow":
+        for command in commands:
+            x = round(command["x"] * coordinate_scale)
+            y = round(command["y"] * coordinate_scale)
+            cv2.putText(
+                frame, command["text"], (x, y), cv2.FONT_HERSHEY_SIMPLEX,
+                max(0.25, command["scale"] * coordinate_scale), command["color"],
+                max(1, round(command["thickness"] * coordinate_scale)), cv2.LINE_AA,
+            )
+        return
+    for command in commands:
+        size = max(9, round(28 * command["scale"] * coordinate_scale))
+        x = round(command["x"] * coordinate_scale)
+        y = round(command["y"] * coordinate_scale)
+        b, g, r = command["color"]
+        stroke = 1 if command["thickness"] > 1 else 0
+        cache_key = (command["text"], size, r, g, b, stroke)
+        cached = _GLYPH_CACHE.get(cache_key)
+        if cached is None:
+            font = get_ui_font(size)
+            probe = Image.new("RGBA", (1, 1))
+            probe_draw = ImageDraw.Draw(probe)
+            left, top, right, bottom = probe_draw.textbbox(
+                (0, 0), command["text"], font=font, anchor="ls", stroke_width=stroke
+            )
+            width, height = max(1, right - left), max(1, bottom - top)
+            glyph = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+            ImageDraw.Draw(glyph).text(
+                (-left, -top), command["text"], font=font, fill=(r, g, b, 255),
+                anchor="ls", stroke_width=stroke,
+            )
+            cached = (np.asarray(glyph), left, top)
+            if len(_GLYPH_CACHE) > 512:
+                _GLYPH_CACHE.clear()
+            _GLYPH_CACHE[cache_key] = cached
+
+        glyph, left, top = cached
+        x1, y1 = x + left, y + top
+        x2, y2 = x1 + glyph.shape[1], y1 + glyph.shape[0]
+        frame_x1, frame_y1 = max(0, x1), max(0, y1)
+        frame_x2, frame_y2 = min(frame.shape[1], x2), min(frame.shape[0], y2)
+        if frame_x1 >= frame_x2 or frame_y1 >= frame_y2:
+            continue
+        glyph_x1, glyph_y1 = frame_x1 - x1, frame_y1 - y1
+        glyph_x2 = glyph_x1 + (frame_x2 - frame_x1)
+        glyph_y2 = glyph_y1 + (frame_y2 - frame_y1)
+        source = glyph[glyph_y1:glyph_y2, glyph_x1:glyph_x2]
+        alpha = source[..., 3:4].astype(np.float32) / 255.0
+        source_bgr = source[..., :3][..., ::-1].astype(np.float32)
+        target = frame[frame_y1:frame_y2, frame_x1:frame_x2].astype(np.float32)
+        frame[frame_y1:frame_y2, frame_x1:frame_x2] = (source_bgr * alpha + target * (1.0 - alpha)).astype(np.uint8)
+
+TEMPORAL_ACTIONS = [
+    ("Hello", "Speaks a greeting"), ("Thank You", "Speaks thanks"),
+    ("Fever", "Reports fever"), ("Injury", "Requests injury help"),
+    ("Drink", "Requests a drink"), ("Cry", "Communicates distress"),
+    ("Come", "Asks someone to come"), ("Give", "Requests an item"),
+    ("Busy", "Says user is busy"), ("Break", "Requests a break"),
+    ("Maybe", "Communicates uncertainty"), ("Wrong", "Reports incorrect result"),
+]
+POSE_GESTURES = [
+    ("Hello", "Open palm: all 5 fingers up", "Says Hello"),
+    ("Help", "Index + middle fingers up", "Says I need help"),
+    ("Yes", "Thumb up; other fingers closed", "Confirms Yes"),
+    ("No", "Pinky up; other fingers closed", "Confirms No"),
+    ("Water", "Index + middle + ring up", "Requests water"),
+    ("Doctor", "Index finger up", "Requests a doctor"),
+    ("Emergency", "Closed fist", "Starts emergency countdown"),
+    ("Washroom", "Four fingers up; thumb closed", "Requests washroom"),
+]
+HEURISTIC_ACTIONS = [(name, action) for name, _, action in POSE_GESTURES if name != "Hello"]
+SOS_GESTURES = [
+    ("3 taps", "Tap thumb and index 3 times"),
+    ("Fist/open", "Close-open fist twice"),
+    ("Thumb rub", "Rub thumb repeatedly"),
+    ("Palm pulse", "Open palm toward/away from camera"),
+]
+CUSTOM_ACTIONS = [
+    ("Pain", "Personal enrollment"), ("Chest", "Personal enrollment"),
+    ("Medicine", "Personal enrollment"), ("Call", "Personal enrollment"),
+    ("Caregiver", "Personal enrollment"),
+]
+TEMPORAL_GUIDE = [name for name, _ in TEMPORAL_ACTIONS]
+HEURISTIC_GUIDE = [name for name, _ in HEURISTIC_ACTIONS]
+CUSTOM_GUIDE = [name for name, _ in CUSTOM_ACTIONS]
 
 
 def draw_rounded_rect(frame, x1, y1, x2, y2, color, radius=14, border=None):
@@ -232,16 +352,14 @@ def draw_filled_box(frame, x1, y1, x2, y2):
 
 
 def draw_text_line(frame, text, x, y, scale=0.55, thickness=1, color=UI_TEXT):
-    cv2.putText(
-        frame,
-        text,
-        (x, y),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        scale,
-        color,
-        thickness,
-        cv2.LINE_AA,
-    )
+    command = {
+        "text": str(text), "x": x, "y": y, "scale": scale,
+        "thickness": thickness, "color": color,
+    }
+    if _TEXT_BATCH is not None:
+        _TEXT_BATCH.append(command)
+        return
+    render_text_commands(frame, [command])
 
 
 def draw_status_chip(frame, label, value, x, y, width=230):
@@ -288,111 +406,132 @@ def draw_project_interface(
     alert_status,
     fps,
     sentence_output,
+    alert_pending_seconds=None,
 ):
+    owns_text_batch = _TEXT_BATCH is None
+    if owns_text_batch:
+        begin_text_batch()
     _, frame_width, _ = frame.shape
-    left, right = 18, 448
     shown_confirmed = "None yet" if detected_text in ("Unknown", "No hand detected") else detected_text
     shown_raw = "Show a gesture" if raw_detected_text == "No hand detected" else raw_detected_text
     distress_color = UI_SUCCESS if safety_state.level == "CALM" else UI_WARNING if safety_state.level == "ELEVATED" else UI_DANGER
 
-    # Brand bar
-    draw_rounded_rect(frame, 18, 16, frame_width - 18, 102, UI_BG, radius=18, border=UI_BORDER)
-    cv2.circle(frame, (49, 48), 17, UI_ACCENT, -1, cv2.LINE_AA)
-    draw_text_line(frame, "G", 40, 56, scale=0.62, thickness=2, color=UI_BG)
-    draw_text_line(frame, PROJECT_TITLE, 78, 48, scale=0.70, thickness=2)
-    draw_text_line(frame, PROJECT_SUBTITLE, 78, 73, scale=0.43, color=UI_MUTED)
-    draw_rounded_rect(frame, frame_width - 680, 35, frame_width - 507, 72, UI_CARD_ALT, radius=18)
-    draw_text_line(frame, clipped(context_mode, 18), frame_width - 662, 59, scale=0.43, color=UI_TEXT)
-    draw_rounded_rect(frame, frame_width - 492, 35, frame_width - 280, 72, distress_color, radius=18)
-    cv2.circle(frame, (frame_width - 468, 53), 6, UI_BG, -1, cv2.LINE_AA)
-    draw_text_line(frame, f"{safety_state.level}  {safety_state.score * 100:.0f}%", frame_width - 453, 59, scale=0.43, thickness=2, color=UI_BG)
+    # Compact camera-first header.
+    draw_rounded_rect(frame, 14, 12, frame_width - 14, 76, UI_BG, radius=16, border=UI_BORDER)
+    cv2.circle(frame, (43, 44), 15, UI_ACCENT, -1, cv2.LINE_AA)
+    draw_text_line(frame, "G", 35, 51, scale=0.53, thickness=2, color=UI_BG)
+    draw_text_line(frame, PROJECT_TITLE, 68, 43, scale=0.60, thickness=2)
+    draw_text_line(frame, PROJECT_SUBTITLE, 68, 63, scale=0.34, color=UI_MUTED)
+    draw_text_line(frame, f"{context_mode}  |  {fps:.0f} FPS", 555, 52, scale=0.40, color=UI_MUTED)
+    draw_rounded_rect(frame, 800, 27, 965, 63, distress_color, radius=17)
+    draw_text_line(frame, f"{safety_state.level}  {safety_state.score * 100:.0f}%", 823, 51, scale=0.40, thickness=2, color=UI_BG)
 
-    # Recognition card
-    draw_rounded_rect(frame, left, 118, right, 258, UI_CARD, radius=16, border=UI_BORDER)
-    draw_section_title(frame, "Live recognition", 36, 142)
-    draw_text_line(frame, clipped(shown_raw, 38), 36, 178, scale=0.62, thickness=2)
-    draw_text_line(frame, f"Confirmed  {clipped(shown_confirmed, 24)}", 36, 207, scale=0.43, color=UI_MUTED)
-    draw_text_line(frame, clipped(recognition_method, 34), 36, 234, scale=0.39, color=UI_MUTED)
-    draw_progress(frame, 282, 230, 420, prediction_confidence)
-    draw_text_line(frame, f"{prediction_confidence * 100:.0f}%", 375, 217, scale=0.36, color=UI_MUTED)
+    # Three compact cards leave most of the camera feed unobstructed.
+    card_text_start = len(_TEXT_BATCH)
+    card_y1, card_y2 = 505, 638
+    draw_rounded_rect(frame, 14, card_y1, 330, card_y2, UI_CARD, radius=15, border=UI_BORDER)
+    draw_section_title(frame, "Recognition", 31, 529)
+    draw_text_line(frame, clipped(shown_raw, 27), 31, 561, scale=0.56, thickness=2)
+    draw_text_line(frame, f"Confirmed: {clipped(shown_confirmed, 18)}", 31, 588, scale=0.38, color=UI_MUTED)
+    draw_text_line(frame, clipped(recognition_method, 27), 31, 614, scale=0.34, color=UI_MUTED)
+    draw_progress(frame, 216, 609, 310, prediction_confidence)
 
-    # Communication card
-    draw_rounded_rect(frame, left, 270, right, 388, UI_CARD, radius=16, border=UI_BORDER)
-    draw_section_title(frame, "Text to sign" if app_mode == "Text-to-Sign Representation" else "Communication", 36, 294)
-    if app_mode == "Text-to-Sign Representation":
-        draw_text_line(frame, clipped(text_to_sign_query, 38), 36, 327, scale=0.55, thickness=2)
-        draw_text_line(frame, clipped(text_to_sign_result, 48), 36, 358, scale=0.42, color=UI_MUTED)
-    else:
-        draw_text_line(frame, clipped(communication_output, 39), 36, 327, scale=0.55, thickness=2)
-        draw_text_line(frame, clipped(sentence_output, 49), 36, 358, scale=0.41, color=UI_MUTED)
+    draw_rounded_rect(frame, 344, card_y1, 824, card_y2, UI_CARD, radius=15, border=UI_BORDER)
+    draw_section_title(frame, "Text to sign" if app_mode == "Text-to-Sign Representation" else "Communication", 362, 529)
+    primary = text_to_sign_query if app_mode == "Text-to-Sign Representation" else communication_output
+    secondary = text_to_sign_result if app_mode == "Text-to-Sign Representation" else sentence_output
+    draw_text_line(frame, clipped(primary, 43), 362, 566, scale=0.55, thickness=2)
+    draw_text_line(frame, clipped(secondary, 57), 362, 598, scale=0.39, color=UI_MUTED)
+    draw_text_line(frame, f"Stable {stability_value}/{required_stable_frames}  |  {response_time_text}", 362, 621, scale=0.32, color=UI_MUTED)
 
-    # Safety card
-    draw_rounded_rect(frame, left, 400, right, 532, UI_CARD, radius=16, border=UI_BORDER)
-    draw_section_title(frame, "Safety signals", 36, 424)
-    draw_text_line(frame, f"{safety_state.level}", 36, 460, scale=0.66, thickness=2, color=distress_color)
-    draw_progress(frame, 137, 454, 420, safety_state.score, distress_color)
+    draw_rounded_rect(frame, 838, card_y1, 1266, card_y2, UI_CARD, radius=15, border=UI_BORDER)
+    draw_section_title(frame, "Safety & system", 856, 529)
+    draw_text_line(frame, safety_state.level, 856, 563, scale=0.57, thickness=2, color=distress_color)
+    draw_progress(frame, 951, 558, 1245, safety_state.score, distress_color)
     if show_testing_metrics:
-        metrics = [("SPEED", safety_state.speed), ("TREMOR", safety_state.tremor), ("REPEATS", safety_state.repetition)]
-        for index, (label, value) in enumerate(metrics):
-            x = 36 + index * 132
-            draw_text_line(frame, label, x, 492, scale=0.32, color=UI_MUTED)
-            shown = f"{value:.2f}" if isinstance(value, float) else str(value)
-            draw_text_line(frame, shown, x, 516, scale=0.48, thickness=2)
+        detail = f"Speed {safety_state.speed:.2f}  Tremor {safety_state.tremor:.2f}  Repeats {safety_state.repetition}"
     else:
-        reason_text = ", ".join(safety_state.reasons) if safety_state.reasons else "No elevated motion signals"
-        draw_text_line(frame, clipped(reason_text, 46), 36, 502, scale=0.41, color=UI_MUTED)
-
-    # Runtime card
-    draw_rounded_rect(frame, left, 544, right, 626, UI_CARD, radius=16, border=UI_BORDER)
-    draw_section_title(frame, "System", 36, 567)
-    runtime = f"{fps:.0f} FPS   {response_time_text}   STABLE {stability_value}/{required_stable_frames}"
-    draw_text_line(frame, runtime, 36, 593, scale=0.40)
+        detail = ", ".join(safety_state.reasons) if safety_state.reasons else "No elevated motion signals"
+    draw_text_line(frame, clipped(detail, 51), 856, 590, scale=0.35, color=UI_MUTED)
     status_color = UI_SUCCESS if "ready" in alert_status.lower() or "delivered" in alert_status.lower() else UI_WARNING
-    cv2.circle(frame, (40, 611), 5, status_color, -1, cv2.LINE_AA)
-    draw_text_line(frame, clipped(alert_status, 45), 53, 617, scale=0.35, color=UI_MUTED)
+    cv2.circle(frame, (861, 613), 5, status_color, -1, cv2.LINE_AA)
+    draw_text_line(frame, clipped(alert_status, 45), 875, 619, scale=0.33, color=UI_MUTED)
 
-    # Key hints
-    draw_rounded_rect(frame, 18, 642, frame_width - 18, 700, UI_BG, radius=15, border=UI_BORDER)
-    hints = [("G", "Guide"), ("X", "Context"), ("P", "Text-Sign"), ("S", "Speak"), ("B", "Calibrate"), ("T", "Details"), ("C", "Clear"), ("Q", "Quit")]
-    x = 38
+    footer_text_start = len(_TEXT_BATCH)
+    draw_rounded_rect(frame, 14, 650, frame_width - 14, 706, UI_BG, radius=14, border=UI_BORDER)
+    hints = [("G", "Gesture guide"), ("X", "Context"), ("P", "Text-Sign"), ("S", "Speak"), ("B", "Calibrate"), ("T", "Metrics"), ("C", "Clear"), ("Q", "Quit")]
+    x = 31
     for key, label in hints:
-        draw_rounded_rect(frame, x, 655, x + 30, 686, UI_CARD_ALT, radius=7)
-        draw_text_line(frame, key, x + 9, 677, scale=0.39, thickness=2, color=UI_ACCENT)
-        draw_text_line(frame, label, x + 38, 677, scale=0.36, color=UI_MUTED)
-        x += 130 if label != "Text-Sign" else 158
+        draw_rounded_rect(frame, x, 662, x + 29, 693, UI_CARD_ALT, radius=7)
+        draw_text_line(frame, key, x + 9, 684, scale=0.38, thickness=2, color=UI_ACCENT)
+        draw_text_line(frame, label, x + 37, 683, scale=0.34, color=UI_MUTED)
+        x += 153 if label == "Gesture guide" else 139
 
     if show_guide:
-        gx1, gx2 = 470, frame_width - 24
-        draw_rounded_rect(frame, gx1, 118, gx2, 590, UI_BG, radius=18, border=UI_BORDER)
-        draw_text_line(frame, "Gesture capabilities", gx1 + 24, 153, scale=0.62, thickness=2)
-        draw_text_line(frame, "What the current build can recognize and how", gx1 + 24, 179, scale=0.40, color=UI_MUTED)
-        groups = [
-            ("VIDEO + MOTION MODEL", TEMPORAL_GUIDE, UI_ACCENT),
-            ("LANDMARK RULES", HEURISTIC_GUIDE, UI_SUCCESS),
-            ("PERSONAL ENROLLMENT REQUIRED", CUSTOM_GUIDE, UI_WARNING),
-        ]
-        y = 215
-        for title, items, color in groups:
-            cv2.circle(frame, (gx1 + 29, y - 5), 5, color, -1, cv2.LINE_AA)
-            draw_text_line(frame, title, gx1 + 43, y, scale=0.36, thickness=2, color=color)
-            for row in range(0, len(items), 4):
-                draw_text_line(frame, "   |   ".join(items[row:row + 4]), gx1 + 28, y + 29, scale=0.40)
-                y += 26
-            y += 27
-        draw_rounded_rect(frame, gx1 + 22, 520, gx2 - 22, 568, UI_CARD_ALT, radius=12)
-        draw_text_line(frame, "Temporal signs require the complete movement - not only the final pose.", gx1 + 40, 550, scale=0.40, color=UI_MUTED)
+        # Text is batched for speed; remove covered card labels so they cannot be
+        # painted over the guide after all shapes have been composed.
+        del _TEXT_BATCH[card_text_start:footer_text_start]
+        gx1, gx2 = 14, frame_width - 14
+        draw_rounded_rect(frame, gx1, 92, gx2, 638, UI_BG, radius=18, border=UI_BORDER)
+        draw_text_line(frame, "HOW TO GESTURE", gx1 + 24, 126, scale=0.58, thickness=2)
+        draw_text_line(frame, "Prototype pose rules are exact. Motion signs must match the trained video movement.", gx1 + 24, 150, scale=0.37, color=UI_MUTED)
+
+        draw_text_line(frame, "INSTANT POSES", 64, 181, scale=0.38, thickness=2, color=UI_SUCCESS)
+        draw_text_line(frame, "GESTURE", 64, 207, scale=0.31, color=UI_MUTED)
+        draw_text_line(frame, "WHAT TO DO", 155, 207, scale=0.31, color=UI_MUTED)
+        draw_text_line(frame, "RESULT", 403, 207, scale=0.31, color=UI_MUTED)
+        for index, (gesture, instruction, action) in enumerate(POSE_GESTURES):
+            y = 235 + index * 31
+            draw_text_line(frame, gesture, 64, y, scale=0.38, thickness=2)
+            draw_text_line(frame, instruction, 155, y, scale=0.33)
+            draw_text_line(frame, action, 403, y, scale=0.32, color=UI_MUTED)
+
+        draw_text_line(frame, "VIDEO-TRAINED MOVEMENTS", 650, 181, scale=0.38, thickness=2, color=UI_ACCENT)
+        draw_text_line(frame, "Perform the full learned movement, not a held pose.", 650, 207, scale=0.33, color=UI_MUTED)
+        for index, (gesture, action) in enumerate(TEMPORAL_ACTIONS):
+            column, row = index // 6, index % 6
+            x = 650 + column * 280
+            y = 237 + row * 31
+            draw_text_line(frame, gesture, x, y, scale=0.37, thickness=2)
+            draw_text_line(frame, action, x + 91, y, scale=0.31, color=UI_MUTED)
+
+        draw_rounded_rect(frame, 635, 440, 1240, 606, UI_CARD_ALT, radius=13)
+        draw_text_line(frame, "SILENT SOS - sends an immediate covert alert", 654, 468, scale=0.37, thickness=2, color=UI_DANGER)
+        for index, (gesture, instruction) in enumerate(SOS_GESTURES):
+            column, row = index // 2, index % 2
+            x = 654 + column * 286
+            y = 500 + row * 31
+            draw_text_line(frame, gesture, x, y, scale=0.35, thickness=2)
+            draw_text_line(frame, instruction, x + 88, y, scale=0.30, color=UI_MUTED)
+        draw_text_line(frame, "Custom: Pain, Chest, Medicine, Call and Caregiver need personal enrollment.", 654, 584, scale=0.31, color=UI_WARNING)
+
+    if alert_pending_seconds is not None:
+        seconds = max(0, int(math.ceil(alert_pending_seconds)))
+        draw_rounded_rect(frame, frame_width - 500, 574, frame_width - 24, 630, UI_DANGER, radius=15)
+        draw_text_line(frame, f"EMERGENCY ALERT IN {seconds}s", frame_width - 476, 608, scale=0.52, thickness=2, color=UI_TEXT)
+        draw_text_line(frame, "Press K to cancel", frame_width - 190, 608, scale=0.40, thickness=2, color=UI_TEXT)
+
+    if owns_text_batch:
+        render_text_commands(frame, end_text_batch())
 
 
 def draw_scaled_project_interface(frame, ui_scale, **interface_values):
-    """Composite a scaled dashboard without shrinking the camera or landmarks."""
-    sentinel = np.array([1, 2, 3], dtype=np.uint8)
-    dashboard = np.empty_like(frame)
-    dashboard[:] = sentinel
-    draw_project_interface(dashboard, **interface_values)
+    """Render the HUD directly at native size; composite only when scaled down."""
+    display_scale = min(frame.shape[1] / LOGICAL_UI_WIDTH, frame.shape[0] / LOGICAL_UI_HEIGHT)
+    interface_scale = max(MIN_UI_SCALE_PERCENT / 100.0, min(float(ui_scale), 1.0))
+    scale = display_scale * interface_scale
+    if abs(scale - 1.0) < 0.001:
+        draw_project_interface(frame, **interface_values)
+        return
 
-    scale = max(MIN_UI_SCALE_PERCENT / 100.0, min(float(ui_scale), 1.0))
-    if scale != 1.0:
-        dashboard = cv2.resize(dashboard, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+    sentinel = np.array([1, 2, 3], dtype=np.uint8)
+    dashboard = np.empty((LOGICAL_UI_HEIGHT, LOGICAL_UI_WIDTH, 3), dtype=np.uint8)
+    dashboard[:] = sentinel
+    begin_text_batch()
+    draw_project_interface(dashboard, **interface_values)
+    text_commands = end_text_batch()
+
+    dashboard = cv2.resize(dashboard, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
 
     height, width = dashboard.shape[:2]
     height = min(height, frame.shape[0])
@@ -401,28 +540,47 @@ def draw_scaled_project_interface(frame, ui_scale, **interface_values):
     mask = np.any(dashboard != sentinel, axis=2)
     target = frame[:height, :width]
     target[mask] = dashboard[mask]
+    render_text_commands(frame, text_commands, coordinate_scale=scale)
 
 
-def draw_ui_scale_slider(frame, percent):
+def slider_geometry(frame):
+    display_scale = min(frame.shape[1] / LOGICAL_UI_WIDTH, frame.shape[0] / LOGICAL_UI_HEIGHT)
+    track_x2 = frame.shape[1] - round(22 * display_scale)
+    track_x1 = track_x2 - round(235 * display_scale)
+    track_y = round(45 * display_scale)
+    box = (
+        track_x1 - round(40 * display_scale), round(10 * display_scale),
+        track_x2 + round(17 * display_scale), round(64 * display_scale),
+    )
+    return track_x1, track_x2, track_y, box, display_scale
+
+
+def draw_ui_scale_slider(frame, percent, state=None):
     """Small cross-platform slider drawn inside the camera view."""
-    draw_rounded_rect(frame, 970, 10, 1262, 64, UI_BG, radius=15, border=UI_BORDER)
-    draw_text_line(frame, f"Interface {percent}%", 986, 31, scale=0.37, color=UI_MUTED)
-    cv2.line(frame, (UI_SLIDER_X1, UI_SLIDER_Y + 10), (UI_SLIDER_X2, UI_SLIDER_Y + 10), UI_BORDER, 4, cv2.LINE_AA)
+    x1, x2, y, box, display_scale = slider_geometry(frame)
+    if state is not None:
+        state["slider"] = (x1, x2, y)
+    draw_rounded_rect(frame, *box, UI_BG, radius=round(15 * display_scale), border=UI_BORDER)
+    draw_text_line(frame, f"Interface {percent}%", box[0] + round(16 * display_scale), round(31 * display_scale), scale=0.37 * display_scale, color=UI_MUTED)
+    track_y = y + round(10 * display_scale)
+    cv2.line(frame, (x1, track_y), (x2, track_y), UI_BORDER, max(3, round(4 * display_scale)), cv2.LINE_AA)
     ratio = (percent - MIN_UI_SCALE_PERCENT) / (100 - MIN_UI_SCALE_PERCENT)
-    knob_x = int(UI_SLIDER_X1 + ratio * (UI_SLIDER_X2 - UI_SLIDER_X1))
-    cv2.line(frame, (UI_SLIDER_X1, UI_SLIDER_Y + 10), (knob_x, UI_SLIDER_Y + 10), UI_ACCENT, 4, cv2.LINE_AA)
-    cv2.circle(frame, (knob_x, UI_SLIDER_Y + 10), 8, UI_TEXT, -1, cv2.LINE_AA)
+    knob_x = int(x1 + ratio * (x2 - x1))
+    cv2.line(frame, (x1, track_y), (knob_x, track_y), UI_ACCENT, max(3, round(4 * display_scale)), cv2.LINE_AA)
+    cv2.circle(frame, (knob_x, track_y), max(6, round(8 * display_scale)), UI_TEXT, -1, cv2.LINE_AA)
 
 
 def handle_ui_scale_mouse(event, x, y, flags, state):
-    inside = UI_SLIDER_X1 - 12 <= x <= UI_SLIDER_X2 + 12 and UI_SLIDER_Y - 8 <= y <= UI_SLIDER_Y + 28
+    x1, x2, slider_y = state.get("slider", (1010, 1245, 35))
+    tolerance = max(14, round((x2 - x1) * 0.08))
+    inside = x1 - tolerance <= x <= x2 + tolerance and slider_y - tolerance <= y <= slider_y + tolerance * 2
     if event == cv2.EVENT_LBUTTONDOWN and inside:
         state["dragging"] = True
     elif event == cv2.EVENT_LBUTTONUP:
         state["dragging"] = False
 
     if state["dragging"] and (event == cv2.EVENT_MOUSEMOVE or event == cv2.EVENT_LBUTTONDOWN):
-        ratio = (min(max(x, UI_SLIDER_X1), UI_SLIDER_X2) - UI_SLIDER_X1) / (UI_SLIDER_X2 - UI_SLIDER_X1)
+        ratio = (min(max(x, x1), x2) - x1) / max(x2 - x1, 1)
         state["percent"] = int(round(MIN_UI_SCALE_PERCENT + ratio * (100 - MIN_UI_SCALE_PERCENT)))
 
 
@@ -620,10 +778,14 @@ def main():
         print(f"Startup error: missing MediaPipe model: {MODEL_TASK_FILE}")
         return
 
-    camera_index = int(os.getenv("GESTURE_BRIDGE_CAMERA_INDEX", "0"))
+    camera_index = env_int("GESTURE_BRIDGE_CAMERA_INDEX", 0, minimum=0, maximum=10)
+    display_width = env_int("GESTURE_BRIDGE_DISPLAY_WIDTH", 1280, minimum=1280, maximum=3840)
+    display_height = env_int("GESTURE_BRIDGE_DISPLAY_HEIGHT", 720, minimum=720, maximum=2160)
+    analysis_width = env_int("GESTURE_BRIDGE_ANALYSIS_WIDTH", 640, minimum=320, maximum=1280)
+    analysis_height = env_int("GESTURE_BRIDGE_ANALYSIS_HEIGHT", 360, minimum=240, maximum=720)
     cap = cv2.VideoCapture(camera_index)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, analysis_width)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, analysis_height)
 
     if not cap.isOpened():
         print(
@@ -632,8 +794,7 @@ def main():
         )
         return
 
-    cv2.namedWindow(WINDOW_TITLE, cv2.WINDOW_NORMAL)
-    cv2.resizeWindow(WINDOW_TITLE, 1280, 720)
+    cv2.namedWindow(WINDOW_TITLE, cv2.WINDOW_AUTOSIZE)
     ui_scale_state = {"percent": DEFAULT_UI_SCALE_PERCENT, "dragging": False}
     cv2.setMouseCallback(WINDOW_TITLE, handle_ui_scale_mouse, ui_scale_state)
 
@@ -653,6 +814,7 @@ def main():
     app_mode = "Sign Recognition"
     text_to_sign_query = "None"
     text_to_sign_result = "Press P and enter a supported phrase"
+    text_entry_active = False
     last_added_gesture = "Unknown"
     last_added_time = 0
     add_cooldown_seconds = ADD_COOLDOWN_SECONDS
@@ -664,7 +826,15 @@ def main():
     alert_manager = AlertManager(log_path=str(BASE_DIR / "emergency_alerts.jsonl"))
     context_interpreter = ContextInterpreter()
     sentence_engine = SentenceEngine()
-    temporal_recognizer = TemporalRecognizer(model_path=str(BASE_DIR / "isl_temporal_model.pkl"))
+    temporal_recognizer = TemporalRecognizer(
+        model_path=str(BASE_DIR / "isl_temporal_model.pkl"),
+        prediction_interval=env_int("GESTURE_BRIDGE_TEMPORAL_INTERVAL", 2, minimum=1, maximum=6),
+    )
+    emergency_controller = EmergencyController(
+        alert_manager,
+        delay_seconds=env_float("GESTURE_BRIDGE_ALERT_COUNTDOWN_SECONDS", 5, minimum=2, maximum=30),
+    )
+    telemetry = SessionTelemetry(BASE_DIR / "session_reports")
     safety_state = safety_analyzer.update([])
     last_alert_time = 0.0
     high_distress_since = None
@@ -679,6 +849,7 @@ def main():
     print(f"Capabilities: {len(TEMPORAL_GUIDE)} temporal, {len(HEURISTIC_GUIDE)} rule-based, {len(CUSTOM_GUIDE)} enrollment-required signs.")
 
     frame_timestamp_ms = 0
+    camera_failures = 0
 
     try:
         landmarker_instance = HandLandmarker.create_from_options(options)
@@ -694,11 +865,17 @@ def main():
             success, frame = cap.read()
 
             if not success:
-                print("Error: Could not read camera frame.")
+                camera_failures += 1
+                if camera_failures < 10:
+                    time.sleep(0.05)
+                    continue
+                print("Runtime error: camera stopped returning frames after 10 retries.")
                 break
+            camera_failures = 0
 
             frame = cv2.flip(frame, 1)
-            frame = cv2.resize(frame, (1280, 720))
+            if frame.shape[1] != analysis_width or frame.shape[0] != analysis_height:
+                frame = cv2.resize(frame, (analysis_width, analysis_height), interpolation=cv2.INTER_AREA)
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
             mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
@@ -714,19 +891,6 @@ def main():
             if result.hand_landmarks and result.handedness:
                 detected_hands = result.hand_landmarks[:MAX_HANDS]
                 handedness_label = result.handedness[0][0].category_name
-
-                for hand_landmarks in detected_hands:
-                    draw_hand_landmarks(frame, hand_landmarks)
-
-                frame_height, frame_width, _ = frame.shape
-                x_min, y_min, x_max, y_max = get_combined_hand_bbox(detected_hands, frame_width, frame_height)
-                cv2.rectangle(
-                    frame,
-                    (x_min - 15, y_min - 15),
-                    (x_max + 15, y_max + 15),
-                    (255, 255, 255),
-                    2,
-                )
 
                 temporal_prediction = temporal_recognizer.update(detected_hands)
                 if temporal_prediction and temporal_prediction[0] == "Still":
@@ -807,6 +971,7 @@ def main():
                     last_added_time = current_time
                     safety_analyzer.note_confirmed_gesture(detected_text, time.monotonic())
                     sentence_engine.add(detected_text)
+                    telemetry.confirmed(detected_text)
 
                     if auto_speak_on_add:
                         speak(detected_text)
@@ -835,16 +1000,25 @@ def main():
                 alert_reason = "Emergency gesture confirmed"
 
             if alert_reason and current_time - last_alert_time >= 8.0:
-                alert_manager.trigger(
-                    alert_reason,
-                    "Emergency distress detected. Please check on the Gesture-Bridge user.",
-                    silent=silent_alert,
-                )
+                message = "Emergency distress detected. Please check on the Gesture-Bridge user."
+                if silent_alert:
+                    payload = alert_manager.trigger(alert_reason, message, silent=True)
+                    telemetry.alert(alert_reason, payload["alert_id"])
+                elif emergency_controller.arm(alert_reason, message, now=time.monotonic()):
+                    telemetry.alert(alert_reason, state="COUNTDOWN_ARMED")
+                    speak("Emergency detected. Press K to cancel the alert.")
                 last_alert_time = current_time
-                if not silent_alert:
-                    speak("Emergency distress detected. Alerting caregiver.")
 
-            if safety_state.level == "SOS":
+            delivered_alert = emergency_controller.tick(time.monotonic())
+            if delivered_alert:
+                telemetry.alert(delivered_alert["reason"], delivered_alert["alert_id"], delivered_alert["state"])
+                speak("Emergency alert sent to caregiver.")
+
+            pending_seconds = emergency_controller.remaining(time.monotonic())
+
+            if pending_seconds is not None:
+                communication_output = f"Emergency alert pending - press K to cancel"
+            elif safety_state.level == "SOS":
                 communication_output = "SILENT SOS SENT TO CAREGIVER"
             elif safety_state.level == "HIGH" and valid_detected_gesture:
                 communication_output = "Emergency distress detected. Alerting caregiver."
@@ -853,6 +1027,30 @@ def main():
             recent_output_text = " | ".join(recent_outputs) if recent_outputs else "No confirmed outputs yet"
             response_time_text = f"{last_response_time:.2f} sec" if last_response_time is not None else "--"
             stability_value = min(stable_frame_count, active_required_frames)
+            telemetry.frame(bool(detected_hands), raw_detected_text, recognition_method, fps)
+
+            shown_alert_status = (
+                f"Alert pending: {math.ceil(pending_seconds)}s - K cancels"
+                if pending_seconds is not None
+                else alert_manager.last_status
+            )
+
+            # Keep inference at 720p, but render the camera and UI at display resolution.
+            if frame.shape[1] != display_width or frame.shape[0] != display_height:
+                frame = cv2.resize(frame, (display_width, display_height), interpolation=cv2.INTER_LINEAR)
+            if detected_hands:
+                for hand_landmarks in detected_hands:
+                    draw_hand_landmarks(frame, hand_landmarks)
+                x_min, y_min, x_max, y_max = get_combined_hand_bbox(detected_hands, display_width, display_height)
+                margin = max(15, round(18 * display_width / LOGICAL_UI_WIDTH))
+                cv2.rectangle(
+                    frame,
+                    (x_min - margin, y_min - margin),
+                    (x_max + margin, y_max + margin),
+                    UI_TEXT,
+                    max(2, round(2 * display_width / LOGICAL_UI_WIDTH)),
+                    cv2.LINE_AA,
+                )
 
             ui_scale_percent = ui_scale_state["percent"]
             draw_scaled_project_interface(
@@ -870,42 +1068,58 @@ def main():
                 show_guide=show_guide,
                 show_testing_metrics=show_testing_metrics,
                 app_mode=app_mode,
-                text_to_sign_query=text_to_sign_query,
+                text_to_sign_query=(text_to_sign_query + "_" if text_entry_active else text_to_sign_query),
                 text_to_sign_result=text_to_sign_result,
                 recognition_method=recognition_method,
                 prediction_confidence=prediction_confidence,
                 safety_state=safety_state,
                 context_mode=context_interpreter.context,
-                alert_status=alert_manager.last_status,
+                alert_status=shown_alert_status,
                 fps=fps,
                 sentence_output=sentence_engine.compose(),
+                alert_pending_seconds=pending_seconds,
             )
-            draw_ui_scale_slider(frame, ui_scale_percent)
+            draw_ui_scale_slider(frame, ui_scale_percent, ui_scale_state)
 
             cv2.imshow(WINDOW_TITLE, frame)
 
+            try:
+                if cv2.getWindowProperty(WINDOW_TITLE, cv2.WND_PROP_VISIBLE) < 1:
+                    break
+            except cv2.error:
+                break
+
             key = cv2.waitKey(1) & 0xFF
 
-            if key == ord("p"):
+            if text_entry_active:
+                if key in (10, 13):
+                    phrase = text_to_sign_query.strip()
+                    normalized_phrase = phrase.lower()
+                    text_entry_active = False
+                    if normalized_phrase in SIGN_INSTRUCTIONS:
+                        text_to_sign_result = SIGN_INSTRUCTIONS[normalized_phrase]
+                        speak(f"{phrase}. Sign representation: {text_to_sign_result}")
+                    else:
+                        text_to_sign_query = phrase if phrase else "None"
+                        text_to_sign_result = "Unsupported phrase. Press G to view supported signs."
+                        speak("Unsupported phrase")
+                elif key == 27:
+                    text_entry_active = False
+                    app_mode = "Sign Recognition"
+                elif key in (8, 127):
+                    text_to_sign_query = text_to_sign_query[:-1]
+                elif 32 <= key <= 126 and len(text_to_sign_query) < 42:
+                    text_to_sign_query += chr(key)
+
+            elif key == ord("p"):
                 app_mode = "Text-to-Sign Representation"
-                print("\nSupported phrases:")
-                for sign_name, instruction in SUPPORTED_SIGNS:
-                    print(f"- {sign_name}: {instruction}")
-
-                phrase = input("Enter phrase for text-to-sign representation: ").strip()
-                normalized_phrase = phrase.lower()
-
-                if normalized_phrase in SIGN_INSTRUCTIONS:
-                    text_to_sign_query = phrase
-                    text_to_sign_result = SIGN_INSTRUCTIONS[normalized_phrase]
-                    speak(f"{phrase}. Sign representation: {text_to_sign_result}")
-                else:
-                    text_to_sign_query = phrase if phrase else "None"
-                    text_to_sign_result = "Unsupported phrase. Press G to view supported signs."
-                    speak("Unsupported phrase")
+                text_to_sign_query = ""
+                text_to_sign_result = "Type a phrase, then press Enter. Esc cancels."
+                text_entry_active = True
 
             elif key == ord("r"):
                 app_mode = "Sign Recognition"
+                text_entry_active = False
                 text_to_sign_query = "None"
                 text_to_sign_result = "Press P and enter a supported phrase"
                 speak("Sign recognition mode")
@@ -927,6 +1141,7 @@ def main():
                 text_to_sign_query = "None"
                 text_to_sign_result = "Press P and enter a supported phrase"
                 app_mode = "Sign Recognition"
+                text_entry_active = False
                 speak("Outputs cleared")
 
             elif key == ord("x"):
@@ -951,7 +1166,10 @@ def main():
                     speak("Emergency alert acknowledged")
 
             elif key == ord("k"):
-                if alert_manager.cancel():
+                if emergency_controller.cancel():
+                    telemetry.alert("Pending emergency", state="COUNTDOWN_CANCELLED")
+                    speak("Emergency alert cancelled")
+                elif alert_manager.cancel():
                     speak("Emergency alert cancelled")
 
             elif key in (ord("-"), ord("_")):
@@ -977,6 +1195,9 @@ def main():
     cap.release()
     cv2.destroyAllWindows()
     speech_service.close()
+    report_path = telemetry.close()
+    if report_path:
+        print(f"Session report: {report_path}")
 
 
 if __name__ == "__main__":

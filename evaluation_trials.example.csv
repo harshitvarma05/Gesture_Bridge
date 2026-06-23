@@ -1,0 +1,3 @@
+participant,trial,expected,predicted,response_time_seconds,false_sos
+P01,1,Hello,Hello,0.42,false
+P01,2,Thank You,Thank You,0.55,false

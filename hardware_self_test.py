@@ -33,12 +33,18 @@ def check_dataset(path="isl_custom_dataset.csv"):
         return {"ok": False, "error": "dataset unavailable"}
 
 
-def check_model(path="isl_landmark_model.pkl"):
+def check_model(path="isl_landmark_model.pkl", metrics_path="model_metrics.json"):
     try:
         with open(path, "rb") as handle:
             model = pickle.load(handle)
+        validation_reliable = False
+        try:
+            validation_reliable = bool(json.loads(Path(metrics_path).read_text(encoding="utf-8")).get("validation_reliable"))
+        except (OSError, ValueError, TypeError):
+            pass
         return {
             "ok": int(model.n_features_in_) == 126,
+            "live_enabled": validation_reliable,
             "features": int(model.n_features_in_),
             "classes": [str(item) for item in model.classes_],
         }
@@ -83,7 +89,13 @@ def provider_readiness():
     twilio_keys = ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_FROM", "GESTURE_BRIDGE_CAREGIVER_TO")
     webhook = bool(os.getenv("GESTURE_BRIDGE_ALERT_WEBHOOK", "").strip())
     twilio = all(os.getenv(key, "").strip() for key in twilio_keys)
-    return {"ok": webhook or twilio, "webhook_configured": webhook, "twilio_configured": twilio}
+    live_mode = os.getenv("GESTURE_BRIDGE_LIVE_ALERTS", "0") == "1"
+    return {
+        "ok": (webhook or twilio) if live_mode else True,
+        "mode": "live" if live_mode else "demo",
+        "webhook_configured": webhook,
+        "twilio_configured": twilio,
+    }
 
 
 def main():
@@ -115,7 +127,7 @@ def main():
         payload = manager.trigger("Integration self-test", "Gesture-Bridge test alert—no emergency.", silent=True)
         report["test_alert"] = {"alert_id": payload["alert_id"], "mode": payload["mode"], "status": manager.last_status}
 
-    critical = (report["dataset"]["ok"], report["model"]["ok"], report["camera"]["ok"])
+    critical = (report["temporal_model"]["ok"], report["camera"]["ok"], report["providers"]["ok"])
     report["ready_for_camera_demo"] = all(critical)
     Path(args.output).write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(json.dumps(report, indent=2))

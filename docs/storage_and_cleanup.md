@@ -1,6 +1,6 @@
 # Storage Audit and Cleanup
 
-Audit performed on 20 June 2026:
+Initial audit performed on 20 June 2026:
 
 | Item | Size | Explanation |
 |---|---:|---|
@@ -13,17 +13,26 @@ Audit performed on 20 June 2026:
 The Finder total is therefore roughly 38 GB even though the largest visible folder
 is `data/`: `.git` is hidden by default and contains the majority of the space.
 
+## Cleanup result
+
+Garbage collection has now completed. Verified on 23 June 2026:
+
+- `.git/`: approximately **6.3 MB** (previously 29 GB)
+- whole project: approximately **8.2 GB** (previously 37–38 GB)
+- current source, model and dataset files were preserved
+
 ## Safe cleanup
 
-The large Git packs are unreachable. The only referenced Codex checkpoint was
+The large Git packs were unreachable. The only referenced Codex checkpoint was
 inspected and contains normal source/model files, not the dataset. Run:
 
 ```bash
 git gc --prune=now
 ```
 
-This should reduce `.git` from approximately 29 GB to tens of megabytes while
-preserving current files, the index and referenced checkpoints.
+This reduced `.git` from approximately 29 GB to a few megabytes while preserving
+current files, the index and referenced checkpoints. It only needs repeating if
+large ignored files are accidentally added to Git again.
 
 After confirming the extracted videos work, the verified source archive can also be
 removed to save about 3.2 GB:

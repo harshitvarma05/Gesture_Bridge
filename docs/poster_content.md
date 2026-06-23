@@ -70,18 +70,18 @@ Add a screenshot of the Gesture-Bridge dashboard beside or below the circuit dia
 ## Results
 
 - Real-time camera dashboard demonstrated at approximately **16 FPS** on the current development machine.
-- Each frame supports **126 normalized landmark features** for two-hand analysis.
+- Static recognition uses **126 normalized shape features**; temporal recognition adds four trajectory features for **130 features per frame**.
 - Stable recognition uses a **10-frame confirmation window** to reduce flickering output.
 - **Four covert SOS patterns** and four motion-distress features are implemented.
 - Emergency alerts support unique IDs, retries, audit states, acknowledgement and cancellation.
-- **10 automated software tests passed**, covering SOS detection, calibration, alerts, dataset migration, contextual sentences and temporal motion features.
+- **17 automated software tests passed**, covering SOS detection, cancelable alerts, calibration, configuration, telemetry, evaluation metrics, dataset migration, user-facing actions, contextual sentences and temporal motion features.
 - The existing dataset contains **334 samples across three labels**; its model is correctly marked provisional and excluded from live use until broader signer and vocabulary coverage is collected.
 
 ### Suggested result graphics
 
 1. Large GUI screenshot with the safety score, FPS and alert status visible.
 2. Small status chart:
-   - Automated tests passed: **10/10**
+   - Automated tests passed: **17/17**
    - SOS patterns implemented: **4**
    - Distress features implemented: **4**
    - Current measured FPS: **≈16**

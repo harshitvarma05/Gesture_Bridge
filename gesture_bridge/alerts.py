@@ -12,6 +12,8 @@ import urllib.parse
 import urllib.request
 import uuid
 
+from .config import env_int
+
 
 def _now():
     return datetime.now().astimezone().isoformat(timespec="seconds")
@@ -52,7 +54,7 @@ class AlertManager:
         self.webhook_url = os.getenv("GESTURE_BRIDGE_ALERT_WEBHOOK", "").strip()
         self.demo_mode = os.getenv("GESTURE_BRIDGE_LIVE_ALERTS", "0") != "1"
         self.location_provider = LocationProvider()
-        self.max_attempts = max(1, int(os.getenv("GESTURE_BRIDGE_ALERT_RETRIES", "3")))
+        self.max_attempts = env_int("GESTURE_BRIDGE_ALERT_RETRIES", 3, minimum=1, maximum=10)
         self.active_alert = None
         self.last_status = "Ready (demo mode)" if self.demo_mode else "Ready"
         self._lock = threading.Lock()
@@ -184,7 +186,7 @@ class AlertManager:
     def _pulse_buzzer():
         try:
             from gpiozero import Buzzer
-            buzzer = Buzzer(int(os.getenv("GESTURE_BRIDGE_BUZZER_PIN", "17")))
+            buzzer = Buzzer(env_int("GESTURE_BRIDGE_BUZZER_PIN", 17, minimum=0, maximum=27))
             buzzer.beep(on_time=0.2, off_time=0.1, n=3, background=True)
         except (ImportError, RuntimeError, OSError, ValueError):
             pass

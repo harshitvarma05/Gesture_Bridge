@@ -7,8 +7,16 @@ without changing the recognition or safety logic.
 
 The production UI is camera-first: live recognition, communication output, safety
 signals, runtime health and alert state remain visible without covering the user.
-Press `G` for the capability guide; it distinguishes video-trained signs, landmark
-rules and gestures that still require personal enrollment.
+Press `G` for an on-screen guide showing the exact prototype hand poses, their
+actions, the video-trained movement classes and all covert SOS patterns. The default
+renderer uses native OpenCV text in a fixed 1280×720 window: it is deliberately
+lighter and sharper than scaling a 720p canvas into a maximized 1080p window. Override
+`GESTURE_BRIDGE_DISPLAY_WIDTH` and `GESTURE_BRIDGE_DISPLAY_HEIGHT` only when the
+target hardware has enough rendering headroom. Pillow text remains an optional
+desktop-only renderer via `GESTURE_BRIDGE_TEXT_RENDERER=pillow`.
+MediaPipe analyzes a 640×360 frame by default and the temporal classifier runs every
+second frame; this keeps the 1280×720 presentation sharp without making inference
+pay the cost of 720p input. A Pi can set `GESTURE_BRIDGE_TEMPORAL_INTERVAL=3` if needed.
 
 ## What is implemented
 
@@ -20,6 +28,8 @@ rules and gestures that still require personal enrollment.
 - Emergency actions: local audit log, optional GPIO buzzer, optional caregiver
   webhook (usable with an SMS/WhatsApp provider), a configured location, and a
   prominent on-screen emergency message.
+- A cancelable countdown before visible/non-silent alerts; covert SOS remains
+  immediate and silent.
 - Context modes for General, Hospital, Classroom, and Public Office.
 - A small offline gesture-to-sentence grammar layer.
 - Text-to-sign instructions, speech output, personalized model loading, live FPS,
@@ -42,6 +52,10 @@ stores a calm-motion calibration after the hand has been visible for three secon
 recognition, `S` speaks the sentence, `C` resets, `G` opens the guide, `T` toggles
 metric detail, `-`/`+` adjust interface size, and `Q` quits. The interface also has
 a draggable scale control.
+
+Press `K` during the emergency countdown to cancel a false alarm. On clean exit,
+the app writes a privacy-conscious aggregate report under `session_reports/`; it
+does not store camera frames.
 
 The default is intentionally safe: alerts are written to
 `emergency_alerts.jsonl` but no real message is sent. Copy the values in
@@ -130,6 +144,19 @@ python hardware_self_test.py --send-test-alert
 
 The second command sends only when live mode and a provider are configured. Confirm
 the caregiver has consented and warn them that the message is a test.
+
+## Participant evaluation
+
+Copy `evaluation_trials.example.csv` to `evaluation_trials.csv`, record the expected
+and observed result for each participant trial, then generate quantitative evidence:
+
+```bash
+python evaluate_trials.py evaluation_trials.csv
+```
+
+This produces accuracy, participant count, response time, false-SOS count and a
+confusion matrix. Follow `docs/validation_protocol.md`; do not split frames from one
+participant across training and testing.
 
 ## Raspberry Pi wiring
 

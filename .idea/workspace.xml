@@ -5,38 +5,20 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="ad11cf57-665b-4709-a241-e8d18b3a3894" name="Changes" comment="Add core application files for the Gesture-Bridge prototype, including gesture recognition, emergency alerts, and user interface components.">
-      <change afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/profiles_settings.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/sign_assist.iml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/app.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/build_video_manifest.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/collect_data.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/config.example.env" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/deploy/gesture-bridge.service" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/deploy/install_pi.sh" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/dataset_report.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/poster_content.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/storage_and_cleanup.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/gesture_bridge/__init__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/gesture_bridge/alerts.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/gesture_bridge/intelligence.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/gesture_bridge/safety.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/gesture_bridge/speech.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/gesture_bridge/temporal.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/hand_landmarker.task" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/hardware_self_test.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/isl_custom_dataset.csv" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/migrate_dataset.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/prepare_isl_video_60.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/tests/test_core.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/train_model.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/train_temporal_model.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app.py" beforeDir="false" afterPath="$PROJECT_DIR$/app.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/config.example.env" beforeDir="false" afterPath="$PROJECT_DIR$/config.example.env" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/poster_content.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/poster_content.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/storage_and_cleanup.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/storage_and_cleanup.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/gesture_bridge/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/gesture_bridge/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/gesture_bridge/alerts.py" beforeDir="false" afterPath="$PROJECT_DIR$/gesture_bridge/alerts.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/gesture_bridge/intelligence.py" beforeDir="false" afterPath="$PROJECT_DIR$/gesture_bridge/intelligence.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/gesture_bridge/temporal.py" beforeDir="false" afterPath="$PROJECT_DIR$/gesture_bridge/temporal.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/hardware_self_test.py" beforeDir="false" afterPath="$PROJECT_DIR$/hardware_self_test.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_core.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_core.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -44,7 +26,7 @@
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="30" />
+    <option name="cachedIndexableFilesCount" value="5176" />
     <option name="fileBasedEmbeddingIndicesEnabled" value="true" />
   </component>
   <component name="FileTemplateManagerImpl">
@@ -57,6 +39,18 @@
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;harshitvarma05&quot;
+  }
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/harshitvarma05/Gesture_Bridge.git&quot;,
+    &quot;accountId&quot;: &quot;1d155c6c-f3fa-4925-9404-49708dd907ea&quot;
+  }
+}</component>
   <component name="McpProjectServerCommands">
     <commands />
     <urls />
@@ -69,31 +63,31 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "Python.app.executor": "Run",
-    "Python.collect_data.executor": "Run",
-    "Python.temporal.executor": "Run",
-    "RunOnceActivity.MCP Project settings loaded": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
-    "ai.playground.ignore.import.keys.banner.in.settings": "true",
-    "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1": "true",
-    "git-widget-placeholder": "main",
-    "junie.onboarding.icon.badge.shown": "true",
-    "node.js.detected.package.eslint": "true",
-    "node.js.detected.package.tslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "node.js.selected.package.tslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm",
-    "settings.editor.selected.configurable": "reference.settingsdialog.IDE.editor.colors.GitLab CI Expression",
-    "to.speed.mode.migration.done": "true",
-    "vue.rearranger.settings.migration": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;Python.app.executor&quot;: &quot;Run&quot;,
+    &quot;Python.collect_data.executor&quot;: &quot;Run&quot;,
+    &quot;Python.temporal.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.MCP Project settings loaded&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
+    &quot;ai.playground.ignore.import.keys.banner.in.settings&quot;: &quot;true&quot;,
+    &quot;com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;reference.settingsdialog.IDE.editor.colors.GitLab CI Expression&quot;,
+    &quot;to.speed.mode.migration.done&quot;: &quot;true&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
-}]]></component>
+}</component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
@@ -116,8 +110,19 @@
       <workItem from="1778212862858" duration="1228000" />
       <workItem from="1778572379765" duration="4000" />
       <workItem from="1781952051706" duration="1249000" />
-      <workItem from="1781954102950" duration="4890000" />
+      <workItem from="1781954102950" duration="5003000" />
+      <workItem from="1782098618695" duration="9000" />
+      <workItem from="1782202316761" duration="1418000" />
     </task>
+    <task id="LOCAL-00001" summary="Add core application files for the Gesture-Bridge prototype, including gesture recognition, emergency alerts, and user interface components.">
+      <option name="closed" value="true" />
+      <created>1781960250643</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1781960250643</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -128,7 +133,7 @@
     <option name="LAST_COMMIT_MESSAGE" value="Add core application files for the Gesture-Bridge prototype, including gesture recognition, emergency alerts, and user interface components." />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
-    <SUITE FILE_PATH="coverage/sign_assist$app.coverage" NAME="app Coverage Results" MODIFIED="1781958235216" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/sign_assist$app.coverage" NAME="app Coverage Results" MODIFIED="1782203735086" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/sign_assist$collect_data.coverage" NAME="collect_data Coverage Results" MODIFIED="1778214108078" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/sign_assist$temporal.coverage" NAME="temporal Coverage Results" MODIFIED="1781956899407" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/gesture_bridge" />
   </component>

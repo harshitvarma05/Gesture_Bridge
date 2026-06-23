@@ -4,7 +4,7 @@
 class ContextInterpreter:
     CONTEXTS = ("General", "Hospital", "Classroom", "Public Office")
     PHRASES = {
-        "General": {"Help": "I need help.", "Emergency": "This is an emergency.", "Pain": "I am in pain.", "Injury": "I am injured.", "Fever": "I have a fever.", "Drink": "I need a drink.", "Cry": "I am upset.", "Call": "Please make a call."},
+        "General": {"Hello": "Hello.", "Thank You": "Thank you.", "Help": "I need help.", "Emergency": "This is an emergency.", "Pain": "I am in pain.", "Injury": "I am injured.", "Fever": "I have a fever.", "Drink": "I need a drink.", "Cry": "I am upset and need support.", "Come": "Please come here.", "Give": "Please give it to me.", "Busy": "I am busy right now.", "Break": "I need a break.", "Maybe": "Maybe; I am not certain.", "Wrong": "That is not correct.", "Call": "Please make a call."},
         "Hospital": {"Help": "I need medical assistance.", "Doctor": "Please call a doctor.", "Water": "May I have some water?", "Medicine": "I need my medicine.", "Pain": "I am in pain.", "Injury": "I have an injury and need assistance.", "Fever": "I have a fever. Please check my temperature.", "Drink": "May I have something to drink?", "Cry": "I am distressed and need assistance.", "Chest": "The pain is in my chest.", "Emergency": "Medical emergency. Please call a doctor."},
         "Classroom": {"Help": "I need help with this.", "Doctor": "I need to visit the medical room.", "Water": "May I drink some water?"},
         "Public Office": {"Help": "Please help me with this process.", "Doctor": "I need medical assistance.", "Emergency": "Emergency—please contact security."},
