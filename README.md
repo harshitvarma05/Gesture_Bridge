@@ -15,11 +15,13 @@ The production UI is camera-first: live recognition, communication output, safet
 signals, runtime health and alert state remain visible without covering the user.
 Press `G` for an on-screen guide showing the exact prototype hand poses, their
 actions, the video-trained movement classes and all covert SOS patterns. The default
-renderer uses native OpenCV text in a fixed 1280×720 window: it is deliberately
-lighter and sharper than scaling a 720p canvas into a maximized 1080p window. Override
+renderer uses cached system fonts on macOS/Windows and lightweight OpenCV text on
+Linux/Pi. HiDPI desktops render a 1920×1080 camera frame while the dashboard remains
+at native pixel density and is bottom-centered instead of being raster-stretched.
+Linux/Pi graphical mode remains 1280×720. Override
 `GESTURE_BRIDGE_DISPLAY_WIDTH` and `GESTURE_BRIDGE_DISPLAY_HEIGHT` only when the
-target hardware has enough rendering headroom. Pillow text remains an optional
-desktop-only renderer via `GESTURE_BRIDGE_TEXT_RENDERER=pillow`.
+target hardware has enough rendering headroom. The renderer can be overridden with
+`GESTURE_BRIDGE_TEXT_RENDERER=pillow` or `opencv`.
 MediaPipe analyzes a 640×360 frame by default; this keeps the 1280×720 presentation
 sharp without making inference pay the cost of 720p input.
 
@@ -57,8 +59,8 @@ Controls: `X` changes context, `Y` confirms a low-confidence suggestion, `B`
 stores a calm-motion calibration after the hand has been visible for three seconds,
 `A` acknowledges an alert, `K` cancels it, `P` opens text-to-sign, `R` returns to
 recognition, `S` speaks the sentence, `C` resets, `G` opens the guide, `T` toggles
-metric detail, `-`/`+` adjust interface size, and `Q` quits. The interface also has
-a draggable scale control. Click the bottom tabs or press `1` for Recognition, `2`
+metric detail, and `Q` quits. The desktop interface is fixed at 150% for HiDPI
+readability. Click the bottom tabs or press `1` for Recognition, `2`
 for Voice, `3` for Safety, and `0` for an uncluttered camera-only view. Clicking the
 selected tab again also collapses it. The full shortcut list is visible inside `G`.
 
@@ -263,6 +265,8 @@ journalctl -u gesture-bridge -f
 
 Headless mode skips all GUI rendering for better Pi performance while retaining the
 webcam, recognition, speech, distress/SOS analysis, buzzer and phone notifications.
+It also forces camera capture to the configured analysis resolution (640×360 by
+default), ignoring desktop HD-capture values to conserve USB bandwidth and memory.
 Keyboard controls—including `K` cancellation—are unavailable without a local window;
 stop the service with `sudo systemctl stop gesture-bridge` if necessary.
 

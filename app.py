@@ -5,6 +5,7 @@ import csv
 import json
 import os
 import pickle
+import platform
 from datetime import datetime
 from pathlib import Path
 import mediapipe as mp
@@ -51,11 +52,13 @@ PERSONAL_METRICS_FILE = BASE_DIR / "model_metrics.json"
 RECENT_OUTPUT_LIMIT = 6
 MAX_HANDS = 2
 WINDOW_TITLE = "Gesture-Bridge | Distress-Aware Silent SOS"
-DEFAULT_UI_SCALE_PERCENT = 100
+DEFAULT_UI_SCALE_PERCENT = 150 if platform.system() in {"Darwin", "Windows"} else 100
 MIN_UI_SCALE_PERCENT = 40
+MAX_UI_SCALE_PERCENT = 150
 LOGICAL_UI_WIDTH = 1280
 LOGICAL_UI_HEIGHT = 720
-TEXT_RENDERER = os.getenv("GESTURE_BRIDGE_TEXT_RENDERER", "opencv").strip().lower()
+DEFAULT_TEXT_RENDERER = "pillow" if platform.system() in {"Darwin", "Windows"} else "opencv"
+TEXT_RENDERER = os.getenv("GESTURE_BRIDGE_TEXT_RENDERER", DEFAULT_TEXT_RENDERER).strip().lower()
 
 SUPPORTED_SIGNS = [
     ("Hello", "Open palm"),
@@ -234,6 +237,11 @@ def render_text_commands(frame, commands, coordinate_scale=1.0, offset_x=0, offs
             x = round(command["x"] * coordinate_scale) + offset_x
             y = round(command["y"] * coordinate_scale) + offset_y
             cv2.putText(
+                frame, command["text"], (x + 1, y + 1), cv2.FONT_HERSHEY_DUPLEX,
+                max(0.25, command["scale"] * coordinate_scale), (8, 12, 18),
+                max(2, round((command["thickness"] + 1) * coordinate_scale)), cv2.LINE_AA,
+            )
+            cv2.putText(
                 frame, command["text"], (x, y), cv2.FONT_HERSHEY_DUPLEX,
                 max(0.25, command["scale"] * coordinate_scale), command["color"],
                 max(1, round(command["thickness"] * coordinate_scale)), cv2.LINE_AA,
@@ -244,7 +252,7 @@ def render_text_commands(frame, commands, coordinate_scale=1.0, offset_x=0, offs
         x = round(command["x"] * coordinate_scale) + offset_x
         y = round(command["y"] * coordinate_scale) + offset_y
         b, g, r = command["color"]
-        stroke = 1 if command["thickness"] > 1 else 0
+        stroke = 1
         cache_key = (command["text"], size, r, g, b, stroke)
         cached = _GLYPH_CACHE.get(cache_key)
         if cached is None:
@@ -258,7 +266,7 @@ def render_text_commands(frame, commands, coordinate_scale=1.0, offset_x=0, offs
             glyph = Image.new("RGBA", (width, height), (0, 0, 0, 0))
             ImageDraw.Draw(glyph).text(
                 (-left, -top), command["text"], font=font, fill=(r, g, b, 255),
-                anchor="ls", stroke_width=stroke,
+                anchor="ls", stroke_width=stroke, stroke_fill=(8, 12, 18, 235),
             )
             cached = (np.asarray(glyph), left, top)
             if len(_GLYPH_CACHE) > 512:
@@ -403,32 +411,37 @@ def draw_project_interface(
 
     # A single tabbed detail panel keeps the live camera unobstructed.
     card_text_start = len(_TEXT_BATCH)
+    dock_top = 640 if active_tab == "camera" else 486
+    draw_rounded_rect(frame, 0, dock_top, frame_width, 720, UI_BG, radius=18)
     tabs = [("recognition", "1", "Recognition"), ("communication", "2", "Voice & sentence"), ("safety", "3", "Safety & alerts")]
     tab_boxes = {}
     tab_x = 14
+    tab_y = 650 if active_tab == "camera" else 496
     for tab_id, key_name, label in tabs:
         width = 212
-        box = (tab_x, 496, tab_x + width, 538)
+        box = (tab_x, tab_y, tab_x + width, tab_y + 42)
         tab_boxes[tab_id] = box
         selected = active_tab == tab_id
-        draw_rounded_rect(frame, *box, UI_ACCENT if selected else UI_BG, radius=12, border=UI_BORDER)
-        key_color = UI_BG if selected else UI_ACCENT
-        text_color = UI_BG if selected else UI_TEXT
-        draw_text_line(frame, key_name, tab_x + 16, 523, scale=0.38, thickness=2, color=key_color)
-        draw_text_line(frame, label, tab_x + 43, 523, scale=0.38, thickness=2, color=text_color)
+        key_color = UI_ACCENT
+        text_color = UI_TEXT
+        draw_text_line(frame, key_name, tab_x + 16, tab_y + 27, scale=0.38, thickness=2, color=key_color)
+        draw_text_line(frame, label, tab_x + 43, tab_y + 27, scale=0.38, thickness=2, color=text_color)
+        if selected:
+            cv2.line(frame, (tab_x + 10, tab_y + 38), (tab_x + width - 10, tab_y + 38), UI_ACCENT, 3, cv2.LINE_AA)
         tab_x += width + 10
-    hide_box = (tab_x, 496, tab_x + 176, 538)
+    hide_box = (tab_x, tab_y, tab_x + 176, tab_y + 42)
     tab_boxes["camera"] = hide_box
     selected = active_tab == "camera"
-    draw_rounded_rect(frame, *hide_box, UI_ACCENT if selected else UI_BG, radius=12, border=UI_BORDER)
-    draw_text_line(frame, "0", tab_x + 16, 523, scale=0.38, thickness=2, color=UI_BG if selected else UI_ACCENT)
-    draw_text_line(frame, "Camera only", tab_x + 43, 523, scale=0.38, thickness=2, color=UI_BG if selected else UI_TEXT)
+    draw_text_line(frame, "0", tab_x + 16, tab_y + 27, scale=0.38, thickness=2, color=UI_ACCENT)
+    draw_text_line(frame, "Camera only", tab_x + 43, tab_y + 27, scale=0.38, thickness=2, color=UI_TEXT)
+    if selected:
+        cv2.line(frame, (tab_x + 10, tab_y + 38), (tab_x + 166, tab_y + 38), UI_ACCENT, 3, cv2.LINE_AA)
     if ui_state is not None:
         ui_state["tab_boxes"] = tab_boxes
 
     panel_y1, panel_y2 = 548, 638
     if active_tab != "camera":
-        draw_rounded_rect(frame, 14, panel_y1, 1266, panel_y2, UI_CARD, radius=14, border=UI_BORDER)
+        cv2.line(frame, (18, panel_y1), (1262, panel_y1), UI_BORDER, 1, cv2.LINE_AA)
 
     if active_tab == "recognition":
         draw_section_title(frame, f"Live recognition  |  {context_mode}  |  {fps:.0f} FPS", 32, 572)
@@ -471,14 +484,14 @@ def draw_project_interface(
         draw_text_line(frame, clipped(alert_status, 43), 872, 610, scale=0.36)
 
     footer_text_start = len(_TEXT_BATCH)
-    draw_rounded_rect(frame, 14, 650, frame_width - 14, 706, UI_BG, radius=14, border=UI_BORDER)
-    hints = [("G", "Guide"), ("X", "Context"), ("P", "Text-Sign"), ("S", "Speak"), ("B", "Calibrate"), ("T", "Metrics"), ("C", "Clear"), ("K", "Cancel"), ("Q", "Quit")]
-    x = 27
-    for key, label in hints:
-        draw_rounded_rect(frame, x, 662, x + 27, 693, UI_CARD_ALT, radius=7)
-        draw_text_line(frame, key, x + 8, 684, scale=0.36, thickness=2, color=UI_ACCENT)
-        draw_text_line(frame, label, x + 34, 683, scale=0.31, color=UI_MUTED)
-        x += 137 if label == "Text-Sign" else 124
+    if active_tab != "camera":
+        cv2.line(frame, (18, 650), (frame_width - 18, 650), UI_BORDER, 1, cv2.LINE_AA)
+        hints = [("G", "Guide"), ("X", "Context"), ("P", "Text-Sign"), ("S", "Speak"), ("B", "Calibrate"), ("T", "Metrics"), ("C", "Clear"), ("K", "Cancel"), ("Q", "Quit")]
+        x = 27
+        for key, label in hints:
+            draw_text_line(frame, key, x + 8, 684, scale=0.36, thickness=2, color=UI_ACCENT)
+            draw_text_line(frame, label, x + 34, 683, scale=0.31, color=UI_MUTED)
+            x += 137 if label == "Text-Sign" else 124
 
     if show_guide:
         # Text is batched for speed; remove covered card labels so they cannot be
@@ -510,7 +523,7 @@ def draw_project_interface(
         draw_text_line(frame, "1 Recognition  |  2 Voice  |  3 Safety  |  0 Camera only", 650, 358, scale=0.31)
         draw_text_line(frame, "G Guide | X Context | P Text-Sign | R Recognition | Y Confirm | S Speak", 650, 381, scale=0.28, color=UI_MUTED)
         draw_text_line(frame, "B Calibrate  |  T Metrics  |  C Clear  |  K Cancel  |  A Acknowledge", 650, 404, scale=0.29, color=UI_MUTED)
-        draw_text_line(frame, "M Auto/Manual  |  -/+ UI scale  |  Q Quit  |  Mouse: tabs + slider", 650, 427, scale=0.29, color=UI_MUTED)
+        draw_text_line(frame, "M Auto/Manual  |  Q Quit  |  Mouse: click tabs", 650, 427, scale=0.29, color=UI_MUTED)
 
         draw_rounded_rect(frame, 635, 440, 1240, 606, UI_CARD_ALT, radius=13)
         draw_text_line(frame, "OPTIONAL SILENT SOS - disabled by default", 654, 468, scale=0.37, thickness=2, color=UI_DANGER)
@@ -534,13 +547,22 @@ def draw_project_interface(
 
 def draw_scaled_project_interface(frame, ui_scale, **interface_values):
     """Render the HUD at native size or scale it while keeping it bottom-anchored."""
-    display_scale = min(frame.shape[1] / LOGICAL_UI_WIDTH, frame.shape[0] / LOGICAL_UI_HEIGHT)
-    interface_scale = max(MIN_UI_SCALE_PERCENT / 100.0, min(float(ui_scale), 1.0))
-    scale = display_scale * interface_scale
+    fit_scale = min(frame.shape[1] / LOGICAL_UI_WIDTH, frame.shape[0] / LOGICAL_UI_HEIGHT)
+    interface_scale = max(
+        MIN_UI_SCALE_PERCENT / 100.0,
+        min(float(ui_scale), MAX_UI_SCALE_PERCENT / 100.0, fit_scale),
+    )
+    # UI scale is deliberately independent from camera/display resolution. This
+    # prevents macOS HiDPI windows from enlarging a 720p raster dashboard.
+    scale = interface_scale
     ui_state = interface_values.get("ui_state")
     if ui_state is not None:
         ui_state["hit_scale"] = scale
-    if abs(scale - 1.0) < 0.001:
+    if (
+        abs(scale - 1.0) < 0.001
+        and frame.shape[1] == LOGICAL_UI_WIDTH
+        and frame.shape[0] == LOGICAL_UI_HEIGHT
+    ):
         if ui_state is not None:
             ui_state["hit_offset"] = (0, 0)
         draw_project_interface(frame, **interface_values)
@@ -553,71 +575,40 @@ def draw_scaled_project_interface(frame, ui_scale, **interface_values):
     draw_project_interface(dashboard, **interface_values)
     text_commands = end_text_batch()
 
-    dashboard = cv2.resize(dashboard, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+    # The normal HUD only occupies the bottom strip. Crop transparent space before
+    # resizing/masking; the larger guide intentionally uses most of the canvas.
+    crop_y = (
+        88 if interface_values.get("show_guide")
+        else 638 if interface_values.get("active_tab") == "camera"
+        else 484
+    )
+    dashboard = dashboard[crop_y:]
+    if abs(scale - 1.0) >= 0.001:
+        dashboard = cv2.resize(dashboard, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
 
     height, width = dashboard.shape[:2]
     height = min(height, frame.shape[0])
     width = min(width, frame.shape[1])
     dashboard = dashboard[:height, :width]
     mask = np.any(dashboard != sentinel, axis=2)
-    offset_x = max(0, (frame.shape[1] - width) // 2)
-    offset_y = max(0, frame.shape[0] - height)
+    full_width = round(LOGICAL_UI_WIDTH * scale)
+    full_height = round(LOGICAL_UI_HEIGHT * scale)
+    offset_x = max(0, (frame.shape[1] - full_width) // 2)
+    full_offset_y = max(0, frame.shape[0] - full_height)
+    target_y = max(0, frame.shape[0] - height)
     if ui_state is not None:
-        ui_state["hit_offset"] = (offset_x, offset_y)
-    target = frame[offset_y:offset_y + height, offset_x:offset_x + width]
+        ui_state["hit_offset"] = (offset_x, full_offset_y)
+    target = frame[target_y:target_y + height, offset_x:offset_x + width]
     target[mask] = dashboard[mask]
     render_text_commands(
         frame, text_commands, coordinate_scale=scale,
-        offset_x=offset_x, offset_y=offset_y,
+        offset_x=offset_x, offset_y=full_offset_y,
     )
 
 
-def slider_geometry(frame):
-    display_scale = min(frame.shape[1] / LOGICAL_UI_WIDTH, frame.shape[0] / LOGICAL_UI_HEIGHT)
-    track_x2 = frame.shape[1] - round(22 * display_scale)
-    track_x1 = track_x2 - round(235 * display_scale)
-    track_y = round(45 * display_scale)
-    box = (
-        track_x1 - round(40 * display_scale), round(10 * display_scale),
-        track_x2 + round(17 * display_scale), round(64 * display_scale),
-    )
-    return track_x1, track_x2, track_y, box, display_scale
-
-
-def draw_ui_scale_slider(frame, percent, state=None):
-    """Small cross-platform slider drawn inside the camera view."""
-    x1, x2, y, box, display_scale = slider_geometry(frame)
-    if state is not None:
-        state["slider"] = (x1, x2, y)
-        state["slider_box"] = box
-    draw_rounded_rect(frame, *box, UI_BG, radius=round(15 * display_scale), border=UI_BORDER)
-    draw_text_line(frame, f"Interface {percent}%", box[0] + round(16 * display_scale), round(31 * display_scale), scale=0.37 * display_scale, color=UI_MUTED)
-    track_y = y + round(10 * display_scale)
-    cv2.line(frame, (x1, track_y), (x2, track_y), UI_BORDER, max(3, round(4 * display_scale)), cv2.LINE_AA)
-    ratio = (percent - MIN_UI_SCALE_PERCENT) / (100 - MIN_UI_SCALE_PERCENT)
-    knob_x = int(x1 + ratio * (x2 - x1))
-    cv2.line(frame, (x1, track_y), (knob_x, track_y), UI_ACCENT, max(3, round(4 * display_scale)), cv2.LINE_AA)
-    cv2.circle(frame, (knob_x, track_y), max(6, round(8 * display_scale)), UI_TEXT, -1, cv2.LINE_AA)
-
-
-def handle_ui_scale_mouse(event, x, y, flags, state):
-    x1, x2, slider_y = state.get("slider", (1010, 1245, 35))
-    tolerance = max(14, round((x2 - x1) * 0.08))
-    slider_box = state.get(
-        "slider_box",
-        (x1 - tolerance, slider_y - tolerance, x2 + tolerance, slider_y + tolerance * 2),
-    )
-    inside = slider_box[0] <= x <= slider_box[2] and slider_box[1] <= y <= slider_box[3]
-    if event == cv2.EVENT_LBUTTONDOWN and inside:
-        state["dragging"] = True
-    elif event == cv2.EVENT_LBUTTONUP:
-        state["dragging"] = False
-
-    if state["dragging"] and (event == cv2.EVENT_MOUSEMOVE or event == cv2.EVENT_LBUTTONDOWN):
-        ratio = (min(max(x, x1), x2) - x1) / max(x2 - x1, 1)
-        state["percent"] = int(round(MIN_UI_SCALE_PERCENT + ratio * (100 - MIN_UI_SCALE_PERCENT)))
-
-    if event == cv2.EVENT_LBUTTONDOWN and not inside:
+def handle_ui_mouse(event, x, y, flags, state):
+    """Handle the clickable tab dock."""
+    if event == cv2.EVENT_LBUTTONDOWN:
         hit_scale = max(float(state.get("hit_scale", 1.0)), 0.01)
         offset_x, offset_y = state.get("hit_offset", (0, 0))
         logical_x = (x - offset_x) / hit_scale
@@ -826,11 +817,28 @@ def main():
     headless = os.getenv("GESTURE_BRIDGE_HEADLESS", "0") == "1"
     enable_silent_sos = os.getenv("GESTURE_BRIDGE_ENABLE_SILENT_SOS", "0") == "1"
     enable_distress_escalation = os.getenv("GESTURE_BRIDGE_ENABLE_DISTRESS_ESCALATION", "0") == "1"
-    display_width = env_int("GESTURE_BRIDGE_DISPLAY_WIDTH", 1280, minimum=1280, maximum=3840)
-    display_height = env_int("GESTURE_BRIDGE_DISPLAY_HEIGHT", 720, minimum=720, maximum=2160)
+    hidpi_desktop = platform.system() in {"Darwin", "Windows"} and not headless
+    display_width = env_int(
+        "GESTURE_BRIDGE_DISPLAY_WIDTH", 1920 if hidpi_desktop else 1280,
+        minimum=1280, maximum=3840,
+    )
+    display_height = env_int(
+        "GESTURE_BRIDGE_DISPLAY_HEIGHT", 1080 if hidpi_desktop else 720,
+        minimum=720, maximum=2160,
+    )
     analysis_width = env_int("GESTURE_BRIDGE_ANALYSIS_WIDTH", 640, minimum=320, maximum=1280)
     analysis_height = env_int("GESTURE_BRIDGE_ANALYSIS_HEIGHT", 360, minimum=240, maximum=720)
-    camera = open_camera(camera_index, analysis_width, analysis_height, fps=30)
+    desktop_hidpi = platform.system() in {"Darwin", "Windows"}
+    default_capture_width = analysis_width if headless else max(display_width, 1920 if desktop_hidpi else 1280)
+    default_capture_height = analysis_height if headless else max(display_height, 1080 if desktop_hidpi else 720)
+    if headless:
+        # An SSH/service deployment never displays the HD frame, so avoid wasting
+        # Pi USB bandwidth and memory even if desktop capture values exist in env.
+        capture_width, capture_height = analysis_width, analysis_height
+    else:
+        capture_width = env_int("GESTURE_BRIDGE_CAPTURE_WIDTH", default_capture_width, minimum=320, maximum=3840)
+        capture_height = env_int("GESTURE_BRIDGE_CAPTURE_HEIGHT", default_capture_height, minimum=240, maximum=2160)
+    camera = open_camera(camera_index, capture_width, capture_height, fps=30)
     if camera is None:
         print(
             f"Startup error: no readable webcam found ({'auto scan' if camera_index < 0 else f'index {camera_index}'}). "
@@ -845,14 +853,12 @@ def main():
     )
 
     ui_scale_state = {
-        "percent": DEFAULT_UI_SCALE_PERCENT,
-        "dragging": False,
         "active_tab": "communication",
         "tab_boxes": {},
     }
     if not headless:
         cv2.namedWindow(WINDOW_TITLE, cv2.WINDOW_AUTOSIZE)
-        cv2.setMouseCallback(WINDOW_TITLE, handle_ui_scale_mouse, ui_scale_state)
+        cv2.setMouseCallback(WINDOW_TITLE, handle_ui_mouse, ui_scale_state)
 
     stable_gesture = "Unknown"
     previous_detected_text = "Unknown"
@@ -923,10 +929,13 @@ def main():
                 break
             camera_failures = 0
 
-            frame = cv2.flip(frame, 1)
-            if frame.shape[1] != analysis_width or frame.shape[0] != analysis_height:
-                frame = cv2.resize(frame, (analysis_width, analysis_height), interpolation=cv2.INTER_AREA)
-            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            camera_frame = cv2.flip(frame, 1)
+            analysis_frame = camera_frame
+            if analysis_frame.shape[1] != analysis_width or analysis_frame.shape[0] != analysis_height:
+                analysis_frame = cv2.resize(
+                    analysis_frame, (analysis_width, analysis_height), interpolation=cv2.INTER_AREA
+                )
+            rgb_frame = cv2.cvtColor(analysis_frame, cv2.COLOR_BGR2RGB)
 
             mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
             frame_timestamp_ms += 33
@@ -940,7 +949,6 @@ def main():
 
             if result.hand_landmarks and result.handedness:
                 detected_hands = result.hand_landmarks[:MAX_HANDS]
-                recognition_method = "Google pretrained gesture model"
                 if result.gestures and result.gestures[0]:
                     category = result.gestures[0][0]
                     prediction_confidence = float(category.score or 0.0)
@@ -1067,6 +1075,7 @@ def main():
             key = 255
             if not headless:
                 # Keep inference small, then render the camera and UI for the local display.
+                frame = camera_frame
                 if frame.shape[1] != display_width or frame.shape[0] != display_height:
                     frame = cv2.resize(frame, (display_width, display_height), interpolation=cv2.INTER_LINEAR)
                 if detected_hands:
@@ -1079,9 +1088,8 @@ def main():
                         UI_TEXT, max(2, round(2 * display_width / LOGICAL_UI_WIDTH)), cv2.LINE_AA,
                     )
 
-                ui_scale_percent = ui_scale_state["percent"]
                 draw_scaled_project_interface(
-                    frame, ui_scale_percent / 100.0,
+                    frame, DEFAULT_UI_SCALE_PERCENT / 100.0,
                     detected_text=detected_text, raw_detected_text=display_detected_text,
                     stability_value=stability_value, required_stable_frames=active_required_frames,
                     communication_output=communication_output, recent_output_text=recent_output_text,
@@ -1095,7 +1103,6 @@ def main():
                     active_tab=ui_scale_state["active_tab"], ui_state=ui_scale_state,
                     alert_pending_seconds=pending_seconds,
                 )
-                draw_ui_scale_slider(frame, ui_scale_percent, ui_scale_state)
                 cv2.imshow(WINDOW_TITLE, frame)
                 try:
                     if cv2.getWindowProperty(WINDOW_TITLE, cv2.WND_PROP_VISIBLE) < 1:
@@ -1193,12 +1200,6 @@ def main():
                     speak("Emergency alert cancelled")
                 elif alert_manager.cancel():
                     speak("Emergency alert cancelled")
-
-            elif key in (ord("-"), ord("_")):
-                ui_scale_state["percent"] = max(MIN_UI_SCALE_PERCENT, ui_scale_state["percent"] - 2)
-
-            elif key in (ord("+"), ord("=")):
-                ui_scale_state["percent"] = min(100, ui_scale_state["percent"] + 2)
 
             elif key == ord("g"):
                 show_guide = not show_guide
