@@ -9,7 +9,7 @@ fi
 SOURCE_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 INSTALL_DIR=/opt/gesture-bridge
 
-install -d -o pi -g pi "$INSTALL_DIR"
+install -d -o harshit -g harshit "$INSTALL_DIR"
 rsync -a --delete \
   --exclude '.git/' \
   --exclude '.idea/' \
@@ -20,10 +20,10 @@ rsync -a --delete \
   --exclude '*.pyc' \
   --exclude '*.log' \
   "$SOURCE_DIR"/ "$INSTALL_DIR"/
-python3 -m venv "$INSTALL_DIR/venv"
+/home/harshit/.pyenv/versions/3.12.8/bin/python -m venv "$INSTALL_DIR/venv"
 "$INSTALL_DIR/venv/bin/pip" install --upgrade pip
 "$INSTALL_DIR/venv/bin/pip" install -r "$INSTALL_DIR/requirements.txt" gpiozero
-chown -R pi:pi "$INSTALL_DIR"
+chown -R harshit:harshit "$INSTALL_DIR"
 
 if [[ ! -f "$INSTALL_DIR/gesture_recognizer.task" ]]; then
   echo "Missing gesture_recognizer.task; installation cannot continue."
