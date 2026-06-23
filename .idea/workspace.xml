@@ -4,7 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="ad11cf57-665b-4709-a241-e8d18b3a3894" name="Changes" comment="Update `install_pi.sh` to use custom user and Python version; revise workspace metadata accordingly." />
+    <list default="true" id="ad11cf57-665b-4709-a241-e8d18b3a3894" name="Changes" comment="Add headless mode for SSH deployments; update service, config, and documentation to support GUI-free operation." />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -98,7 +98,7 @@
       <workItem from="1781954102950" duration="5003000" />
       <workItem from="1782098618695" duration="9000" />
       <workItem from="1782202316761" duration="5926000" />
-      <workItem from="1782210461020" duration="1682000" />
+      <workItem from="1782210461020" duration="2373000" />
     </task>
     <task id="LOCAL-00001" summary="Add core application files for the Gesture-Bridge prototype, including gesture recognition, emergency alerts, and user interface components.">
       <option name="closed" value="true" />
@@ -132,7 +132,23 @@
       <option name="project" value="LOCAL" />
       <updated>1782213080148</updated>
     </task>
-    <option name="localTasksCounter" value="5" />
+    <task id="LOCAL-00005" summary="Add support for cross-platform USB webcam discovery and OpenCV setup; integrate with Raspberry Pi deployment and hardware tests.">
+      <option name="closed" value="true" />
+      <created>1782225569931</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1782225569931</updated>
+    </task>
+    <task id="LOCAL-00006" summary="Add headless mode for SSH deployments; update service, config, and documentation to support GUI-free operation.">
+      <option name="closed" value="true" />
+      <created>1782226010711</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1782226010711</updated>
+    </task>
+    <option name="localTasksCounter" value="7" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -143,7 +159,9 @@
     <MESSAGE value="Refactor core components to improve temporal recognition, implement cancelable emergency countdown, enhance evaluation tools, and update documentation and UI rendering options." />
     <MESSAGE value="Add gesture debouncer, context-aware phrase generation, MacOS speech support, caregiver notifications, and expanded documentation." />
     <MESSAGE value="Update `install_pi.sh` to use custom user and Python version; revise workspace metadata accordingly." />
-    <option name="LAST_COMMIT_MESSAGE" value="Update `install_pi.sh` to use custom user and Python version; revise workspace metadata accordingly." />
+    <MESSAGE value="Add support for cross-platform USB webcam discovery and OpenCV setup; integrate with Raspberry Pi deployment and hardware tests." />
+    <MESSAGE value="Add headless mode for SSH deployments; update service, config, and documentation to support GUI-free operation." />
+    <option name="LAST_COMMIT_MESSAGE" value="Add headless mode for SSH deployments; update service, config, and documentation to support GUI-free operation." />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/sign_assist$app.coverage" NAME="app Coverage Results" MODIFIED="1782208955298" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
