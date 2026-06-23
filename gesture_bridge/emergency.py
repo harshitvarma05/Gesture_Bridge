@@ -51,3 +51,25 @@ class EmergencyController:
         self.last_result = f"Alert sent: {payload['alert_id']}"
         return payload
 
+
+def select_alert_trigger(
+    confirmed_event,
+    detected_text,
+    safety_state,
+    high_distress_seconds=0.0,
+    enable_silent_sos=False,
+    enable_distress_escalation=False,
+):
+    """Return an alert reason and silent flag using conservative defaults."""
+    if confirmed_event == "Emergency":
+        return "Emergency gesture confirmed", False
+    if enable_silent_sos and safety_state.sos_pattern:
+        return f"Silent SOS: {safety_state.sos_pattern}", True
+    if (
+        enable_distress_escalation
+        and safety_state.level == "HIGH"
+        and high_distress_seconds >= 1.0
+        and detected_text in {"Help", "Emergency", "Doctor"}
+    ):
+        return f"Distress + repeated {detected_text} gesture", False
+    return None, False

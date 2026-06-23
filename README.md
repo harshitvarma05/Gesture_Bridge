@@ -104,6 +104,12 @@ are bearer-style secrets, not medical-record storage. Twilio SMS/WhatsApp and ge
 webhooks remain supported alternatives. Delivery is retried, one failed provider no
 longer blocks another, and every state transition is written to the local audit log.
 
+To prevent ordinary hand movement from producing emergency notifications, the live
+default sends only for a confirmed closed-fist Emergency. Silent-SOS motion patterns
+and distress-based escalation are experimental and remain off unless
+`GESTURE_BRIDGE_ENABLE_SILENT_SOS=1` or
+`GESTURE_BRIDGE_ENABLE_DISTRESS_ESCALATION=1` is explicitly configured after testing.
+
 ## Optional experimental training tools
 
 The repository retains collection and training tools for future research, but the

@@ -16,7 +16,7 @@ from hardware_self_test import check_dataset
 from build_video_manifest import build_manifest
 from gesture_bridge.temporal import FRAME_FEATURES, SEQUENCE_STEPS, sequence_descriptor
 from prepare_isl_video_60 import prepare, source_stem
-from gesture_bridge.emergency import EmergencyController
+from gesture_bridge.emergency import EmergencyController, select_alert_trigger
 from gesture_bridge.telemetry import SessionTelemetry
 from evaluate_trials import evaluate
 from gesture_bridge.config import env_float, env_int
@@ -148,6 +148,21 @@ class AlertTests(unittest.TestCase):
             payload = controller.tick(now=13)
             self.assertEqual(payload["reason"], "Emergency")
             self.assertIsNone(controller.pending)
+
+    def test_only_emergency_pose_alerts_by_default(self):
+        noisy_motion = Point(level="SOS", sos_pattern="palm pulse gesture")
+        self.assertEqual(select_alert_trigger(None, "Hello", noisy_motion), (None, False))
+        self.assertEqual(
+            select_alert_trigger("Emergency", "Emergency", noisy_motion),
+            ("Emergency gesture confirmed", False),
+        )
+
+    def test_silent_sos_requires_explicit_opt_in(self):
+        state = Point(level="SOS", sos_pattern="3 finger taps")
+        self.assertEqual(
+            select_alert_trigger(None, "Unknown", state, enable_silent_sos=True),
+            ("Silent SOS: 3 finger taps", True),
+        )
 
     def test_ntfy_phone_notification_contains_location(self):
         environment = {

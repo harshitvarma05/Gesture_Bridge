@@ -4,7 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="ad11cf57-665b-4709-a241-e8d18b3a3894" name="Changes" comment="Add headless mode for SSH deployments; update service, config, and documentation to support GUI-free operation." />
+    <list default="true" id="ad11cf57-665b-4709-a241-e8d18b3a3894" name="Changes" comment="Add headless mode for SSH deployments; update service, config, and documentation to support GUI-free operation.">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -98,7 +100,7 @@
       <workItem from="1781954102950" duration="5003000" />
       <workItem from="1782098618695" duration="9000" />
       <workItem from="1782202316761" duration="5926000" />
-      <workItem from="1782210461020" duration="2776000" />
+      <workItem from="1782210461020" duration="3469000" />
     </task>
     <task id="LOCAL-00001" summary="Add core application files for the Gesture-Bridge prototype, including gesture recognition, emergency alerts, and user interface components.">
       <option name="closed" value="true" />
@@ -156,7 +158,15 @@
       <option name="project" value="LOCAL" />
       <updated>1782226417457</updated>
     </task>
-    <option name="localTasksCounter" value="8" />
+    <task id="LOCAL-00008" summary="Add headless mode for SSH deployments; update service, config, and documentation to support GUI-free operation.">
+      <option name="closed" value="true" />
+      <created>1782226784321</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1782226784321</updated>
+    </task>
+    <option name="localTasksCounter" value="9" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">

@@ -15,7 +15,7 @@ from mediapipe.tasks.python.components import processors
 from gesture_bridge import AlertManager, ContextInterpreter, GestureDebouncer, SafetyAnalyzer, SentenceEngine
 from gesture_bridge import __version__
 from gesture_bridge.speech import SpeechService
-from gesture_bridge.emergency import EmergencyController
+from gesture_bridge.emergency import EmergencyController, select_alert_trigger
 from gesture_bridge.telemetry import SessionTelemetry
 from gesture_bridge.config import env_float, env_int, load_env_file
 from gesture_bridge.camera import open_camera
@@ -513,14 +513,14 @@ def draw_project_interface(
         draw_text_line(frame, "M Auto/Manual  |  -/+ UI scale  |  Q Quit  |  Mouse: tabs + slider", 650, 427, scale=0.29, color=UI_MUTED)
 
         draw_rounded_rect(frame, 635, 440, 1240, 606, UI_CARD_ALT, radius=13)
-        draw_text_line(frame, "SILENT SOS - sends an immediate covert alert", 654, 468, scale=0.37, thickness=2, color=UI_DANGER)
+        draw_text_line(frame, "OPTIONAL SILENT SOS - disabled by default", 654, 468, scale=0.37, thickness=2, color=UI_DANGER)
         for index, (gesture, instruction) in enumerate(SOS_GESTURES):
             column, row = index // 2, index % 2
             x = 654 + column * 286
             y = 500 + row * 31
             draw_text_line(frame, gesture, x, y, scale=0.35, thickness=2)
             draw_text_line(frame, instruction, x + 88, y, scale=0.30, color=UI_MUTED)
-        draw_text_line(frame, "Distress scoring continues to use hand speed, tremor and repetition.", 654, 584, scale=0.31, color=UI_WARNING)
+        draw_text_line(frame, "Enable only after calibration; closed-fist Emergency always uses the alert countdown.", 654, 584, scale=0.29, color=UI_WARNING)
 
     if alert_pending_seconds is not None:
         seconds = max(0, int(math.ceil(alert_pending_seconds)))
@@ -824,6 +824,8 @@ def main():
 
     camera_index = env_int("GESTURE_BRIDGE_CAMERA_INDEX", -1, minimum=-1, maximum=10)
     headless = os.getenv("GESTURE_BRIDGE_HEADLESS", "0") == "1"
+    enable_silent_sos = os.getenv("GESTURE_BRIDGE_ENABLE_SILENT_SOS", "0") == "1"
+    enable_distress_escalation = os.getenv("GESTURE_BRIDGE_ENABLE_DISTRESS_ESCALATION", "0") == "1"
     display_width = env_int("GESTURE_BRIDGE_DISPLAY_WIDTH", 1280, minimum=1280, maximum=3840)
     display_height = env_int("GESTURE_BRIDGE_DISPLAY_HEIGHT", 720, minimum=720, maximum=2160)
     analysis_width = env_int("GESTURE_BRIDGE_ANALYSIS_WIDTH", 640, minimum=320, maximum=1280)
@@ -1001,19 +1003,15 @@ def main():
             else:
                 high_distress_since = None
 
-            alert_reason = None
-            silent_alert = False
-            if safety_state.sos_pattern:
-                alert_reason = f"Silent SOS: {safety_state.sos_pattern}"
-                silent_alert = True
-            elif (
-                high_distress_since
-                and current_time - high_distress_since >= 1.0
-                and detected_text in ("Help", "Emergency", "Doctor")
-            ):
-                alert_reason = f"Distress + repeated {detected_text} gesture"
-            elif confirmed_event == "Emergency":
-                alert_reason = "Emergency gesture confirmed"
+            high_distress_seconds = current_time - high_distress_since if high_distress_since else 0.0
+            alert_reason, silent_alert = select_alert_trigger(
+                confirmed_event,
+                detected_text,
+                safety_state,
+                high_distress_seconds=high_distress_seconds,
+                enable_silent_sos=enable_silent_sos,
+                enable_distress_escalation=enable_distress_escalation,
+            )
 
             if alert_reason and current_time - last_alert_time >= 8.0:
                 message = "Emergency distress detected. Please check on the Gesture-Bridge user."
@@ -1044,9 +1042,9 @@ def main():
 
             if pending_seconds is not None:
                 communication_output = f"Emergency alert pending - press K to cancel"
-            elif safety_state.level == "SOS":
+            elif safety_state.level == "SOS" and enable_silent_sos:
                 communication_output = "SILENT SOS SENT TO CAREGIVER"
-            elif safety_state.level == "HIGH" and valid_detected_gesture:
+            elif safety_state.level == "HIGH" and valid_detected_gesture and enable_distress_escalation:
                 communication_output = "Emergency distress detected. Alerting caregiver."
             else:
                 communication_output = (
