@@ -9,6 +9,7 @@ SupplementaryGroups=video gpio
 WorkingDirectory=/opt/gesture-bridge
 EnvironmentFile=/etc/gesture-bridge.env
 Environment=MPLCONFIGDIR=/tmp/gesture-bridge-matplotlib
+Environment=PYTHONUNBUFFERED=1
 Environment=DISPLAY=:0
 ExecStart=/opt/gesture-bridge/venv/bin/python /opt/gesture-bridge/app.py
 Restart=on-failure

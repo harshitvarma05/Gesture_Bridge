@@ -823,6 +823,7 @@ def main():
         return
 
     camera_index = env_int("GESTURE_BRIDGE_CAMERA_INDEX", -1, minimum=-1, maximum=10)
+    headless = os.getenv("GESTURE_BRIDGE_HEADLESS", "0") == "1"
     display_width = env_int("GESTURE_BRIDGE_DISPLAY_WIDTH", 1280, minimum=1280, maximum=3840)
     display_height = env_int("GESTURE_BRIDGE_DISPLAY_HEIGHT", 720, minimum=720, maximum=2160)
     analysis_width = env_int("GESTURE_BRIDGE_ANALYSIS_WIDTH", 640, minimum=320, maximum=1280)
@@ -837,17 +838,19 @@ def main():
     cap = camera.capture
     print(
         f"Camera: index {camera.index}, backend {camera.backend}, "
-        f"{camera.width}x{camera.height} at requested {camera.fps:.0f} FPS"
+        f"{camera.width}x{camera.height} at requested {camera.fps:.0f} FPS",
+        flush=True,
     )
 
-    cv2.namedWindow(WINDOW_TITLE, cv2.WINDOW_AUTOSIZE)
     ui_scale_state = {
         "percent": DEFAULT_UI_SCALE_PERCENT,
         "dragging": False,
         "active_tab": "communication",
         "tab_boxes": {},
     }
-    cv2.setMouseCallback(WINDOW_TITLE, handle_ui_scale_mouse, ui_scale_state)
+    if not headless:
+        cv2.namedWindow(WINDOW_TITLE, cv2.WINDOW_AUTOSIZE)
+        cv2.setMouseCallback(WINDOW_TITLE, handle_ui_scale_mouse, ui_scale_state)
 
     stable_gesture = "Unknown"
     previous_detected_text = "Unknown"
@@ -887,10 +890,11 @@ def main():
     fps = 0.0
     clarification_candidate = None
 
-    print("Gesture-Bridge distress-aware assistive system started.")
-    print("Recognizer: Google MediaPipe pretrained canned gesture model")
-    print("Controls: X = context, Y = confirm suggestion, P = text-to-sign, R = recognition, S = speak, C = clear, G = guide, T = metrics, Q = quit.")
-    print(f"Capabilities: {len(HEURISTIC_GUIDE)} pretrained poses plus distress and silent SOS detection.")
+    print("Gesture-Bridge distress-aware assistive system started.", flush=True)
+    print(f"Display mode: {'headless (SSH/service)' if headless else 'graphical'}", flush=True)
+    print("Recognizer: Google MediaPipe pretrained canned gesture model", flush=True)
+    print("Controls: X = context, Y = confirm suggestion, P = text-to-sign, R = recognition, S = speak, C = clear, G = guide, T = metrics, Q = quit.", flush=True)
+    print(f"Capabilities: {len(HEURISTIC_GUIDE)} pretrained poses plus distress and silent SOS detection.", flush=True)
 
     frame_timestamp_ms = 0
     camera_failures = 0
@@ -979,6 +983,11 @@ def main():
                 safety_analyzer.note_confirmed_gesture(confirmed_event, monotonic_now)
                 sentence_engine.add(confirmed_event)
                 telemetry.confirmed(confirmed_event)
+                print(
+                    f"GESTURE {confirmed_event}: {context_interpreter.interpret(confirmed_event)} "
+                    f"(confidence {prediction_confidence:.0%})",
+                    flush=True,
+                )
 
                 if auto_speak_on_add and confirmed_event != "Emergency":
                     # Preserve normal phrases in order (for example "Hello" then
@@ -1024,6 +1033,10 @@ def main():
             if delivered_alert:
                 telemetry.alert(delivered_alert["reason"], delivered_alert["alert_id"], delivered_alert["state"])
                 speak("Emergency alert sent to caregiver.", urgent=True)
+                print(
+                    f"ALERT {delivered_alert['alert_id']}: {alert_manager.last_status}",
+                    flush=True,
+                )
 
             pending_seconds = emergency_controller.remaining(time.monotonic())
             if pending_seconds is not None or safety_state.level in {"HIGH", "SOS"}:
@@ -1053,64 +1066,45 @@ def main():
                 else alert_manager.last_status
             )
 
-            # Keep inference at 720p, but render the camera and UI at display resolution.
-            if frame.shape[1] != display_width or frame.shape[0] != display_height:
-                frame = cv2.resize(frame, (display_width, display_height), interpolation=cv2.INTER_LINEAR)
-            if detected_hands:
-                for hand_landmarks in detected_hands:
-                    draw_hand_landmarks(frame, hand_landmarks)
-                x_min, y_min, x_max, y_max = get_combined_hand_bbox(detected_hands, display_width, display_height)
-                margin = max(15, round(18 * display_width / LOGICAL_UI_WIDTH))
-                cv2.rectangle(
-                    frame,
-                    (x_min - margin, y_min - margin),
-                    (x_max + margin, y_max + margin),
-                    UI_TEXT,
-                    max(2, round(2 * display_width / LOGICAL_UI_WIDTH)),
-                    cv2.LINE_AA,
+            key = 255
+            if not headless:
+                # Keep inference small, then render the camera and UI for the local display.
+                if frame.shape[1] != display_width or frame.shape[0] != display_height:
+                    frame = cv2.resize(frame, (display_width, display_height), interpolation=cv2.INTER_LINEAR)
+                if detected_hands:
+                    for hand_landmarks in detected_hands:
+                        draw_hand_landmarks(frame, hand_landmarks)
+                    x_min, y_min, x_max, y_max = get_combined_hand_bbox(detected_hands, display_width, display_height)
+                    margin = max(15, round(18 * display_width / LOGICAL_UI_WIDTH))
+                    cv2.rectangle(
+                        frame, (x_min - margin, y_min - margin), (x_max + margin, y_max + margin),
+                        UI_TEXT, max(2, round(2 * display_width / LOGICAL_UI_WIDTH)), cv2.LINE_AA,
+                    )
+
+                ui_scale_percent = ui_scale_state["percent"]
+                draw_scaled_project_interface(
+                    frame, ui_scale_percent / 100.0,
+                    detected_text=detected_text, raw_detected_text=display_detected_text,
+                    stability_value=stability_value, required_stable_frames=active_required_frames,
+                    communication_output=communication_output, recent_output_text=recent_output_text,
+                    response_time_text=response_time_text, total_confirmed_outputs=total_confirmed_outputs,
+                    auto_mode=auto_mode, show_guide=show_guide, show_testing_metrics=show_testing_metrics,
+                    app_mode=app_mode, text_to_sign_query=(text_to_sign_query + "_" if text_entry_active else text_to_sign_query),
+                    text_to_sign_result=text_to_sign_result, recognition_method=recognition_method,
+                    prediction_confidence=prediction_confidence, safety_state=safety_state,
+                    context_mode=context_interpreter.context, alert_status=shown_alert_status, fps=fps,
+                    sentence_output=context_interpreter.compose(recent_outputs), speech_status=speech_service.status,
+                    active_tab=ui_scale_state["active_tab"], ui_state=ui_scale_state,
+                    alert_pending_seconds=pending_seconds,
                 )
-
-            ui_scale_percent = ui_scale_state["percent"]
-            draw_scaled_project_interface(
-                frame,
-                ui_scale_percent / 100.0,
-                detected_text=detected_text,
-                raw_detected_text=display_detected_text,
-                stability_value=stability_value,
-                required_stable_frames=active_required_frames,
-                communication_output=communication_output,
-                recent_output_text=recent_output_text,
-                response_time_text=response_time_text,
-                total_confirmed_outputs=total_confirmed_outputs,
-                auto_mode=auto_mode,
-                show_guide=show_guide,
-                show_testing_metrics=show_testing_metrics,
-                app_mode=app_mode,
-                text_to_sign_query=(text_to_sign_query + "_" if text_entry_active else text_to_sign_query),
-                text_to_sign_result=text_to_sign_result,
-                recognition_method=recognition_method,
-                prediction_confidence=prediction_confidence,
-                safety_state=safety_state,
-                context_mode=context_interpreter.context,
-                alert_status=shown_alert_status,
-                fps=fps,
-                sentence_output=context_interpreter.compose(recent_outputs),
-                speech_status=speech_service.status,
-                active_tab=ui_scale_state["active_tab"],
-                ui_state=ui_scale_state,
-                alert_pending_seconds=pending_seconds,
-            )
-            draw_ui_scale_slider(frame, ui_scale_percent, ui_scale_state)
-
-            cv2.imshow(WINDOW_TITLE, frame)
-
-            try:
-                if cv2.getWindowProperty(WINDOW_TITLE, cv2.WND_PROP_VISIBLE) < 1:
+                draw_ui_scale_slider(frame, ui_scale_percent, ui_scale_state)
+                cv2.imshow(WINDOW_TITLE, frame)
+                try:
+                    if cv2.getWindowProperty(WINDOW_TITLE, cv2.WND_PROP_VISIBLE) < 1:
+                        break
+                except cv2.error:
                     break
-            except cv2.error:
-                break
-
-            key = cv2.waitKey(1) & 0xFF
+                key = cv2.waitKey(1) & 0xFF
 
             if text_entry_active:
                 if key in (10, 13):
@@ -1235,7 +1229,8 @@ def main():
                 break
 
     cap.release()
-    cv2.destroyAllWindows()
+    if not headless:
+        cv2.destroyAllWindows()
     speech_service.close()
     report_path = telemetry.close()
     if report_path:

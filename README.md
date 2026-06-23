@@ -238,6 +238,28 @@ runs with `video` and `gpio` supplementary groups. After configuration changes r
 `journalctl -u gesture-bridge -n 100 --no-pager` to inspect the selected camera or
 any permission error.
 
+### Running through SSH without a monitor
+
+SSH terminals cannot display the OpenCV window. Enable headless mode in
+`/etc/gesture-bridge.env`:
+
+```bash
+GESTURE_BRIDGE_HEADLESS=1
+GESTURE_BRIDGE_CAMERA_INDEX=-1
+```
+
+Restart and follow recognition/alert events in the journal:
+
+```bash
+sudo systemctl restart gesture-bridge
+journalctl -u gesture-bridge -f
+```
+
+Headless mode skips all GUI rendering for better Pi performance while retaining the
+webcam, recognition, speech, distress/SOS analysis, buzzer and phone notifications.
+Keyboard controls—including `K` cancellation—are unavailable without a local window;
+stop the service with `sudo systemctl stop gesture-bridge` if necessary.
+
 ## Production boundary
 
 The code is hardened for prototype deployment: paths are independent of the launch
